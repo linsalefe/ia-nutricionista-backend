@@ -1,3 +1,5 @@
+# app/main.py
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -18,9 +20,15 @@ from app.endpoints.meal import router as meal_router
 app = FastAPI(title="IA Nutricionista SaaS", version="0.1.0")
 
 # Configuração de CORS para permitir chamadas do frontend
+origins = [
+    "https://app-nutriflow.onrender.com",  # domínio de produção
+    "http://localhost:5173",               # Vite dev
+    "http://localhost:4173",               # Vite preview
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Origem do seu frontend
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,14 +39,10 @@ def read_root():
     return {"msg": "API online!"}
 
 # Rotas dos endpoints da aplicação
-app.include_router(user_router,        prefix="/api/user",        tags=["user"])
-app.include_router(dashboard_router,   prefix="/api/dashboard",   tags=["dashboard"])
-app.include_router(weight_logs_router, prefix="/api/weight-logs", tags=["weight-logs"])
-
-# Rotas de chat: envio de mensagem e histórico
-app.include_router(chat_router,        prefix="/api/chat", tags=["chat"])
-app.include_router(chat_history_router,prefix="/api/chat", tags=["chat-history"])
-
-# Rotas adicionais (análise de imagens, refeições, etc.)
-app.include_router(image_router, prefix="/api/image", tags=["image"])
-app.include_router(meal_router,  prefix="/api/meal",  tags=["meal"])
+app.include_router(user_router,         prefix="/api/user",      tags=["user"])
+app.include_router(dashboard_router,    prefix="/api/dashboard", tags=["dashboard"])
+app.include_router(weight_logs_router,  prefix="/api/weight-logs", tags=["weight-logs"])
+app.include_router(chat_router,         prefix="/api/chat",       tags=["chat"])
+app.include_router(chat_history_router, prefix="/api/chat-history", tags=["chat-history"])
+app.include_router(image_router,        prefix="/api/image",      tags=["image"])
+app.include_router(meal_router,         prefix="/api/meal",       tags=["meal"])
