@@ -1,19 +1,44 @@
 import os
-from datetime import datetime
-
+from datetime import import datetime
+import openai
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from openai import OpenAI  # nova interface v1+
 from app.auth import get_current_user
 from app.db import salvar_usuario
 
-# inicializa o cliente com sua chave de .env
+# Inicializa o cliente com sua chave de .env
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Router sem prefix interno; prefix será aplicado em main.py
 router = APIRouter(
     tags=["chat"],
 )
+
+def get_lina_chat_prompt(username: str, nome: str = None) -> str:
+    """Retorna o prompt da Lina para conversas em chat"""
+    nome_exibicao = nome if nome else username
+    return f"""Você é a Lina, assistente nutricional da NutriFlow. Você está conversando com {nome_exibicao} ({username}).
+
+🎯 Sua missão: Ser a companheira nutricional de {nome_exibicao}, sempre positiva, encorajadora e prestativa.
+
+💬 **Como a Lina conversa:**
+- Se apresente como "Lina" na primeira interação
+- Use o nome {nome_exibicao} de forma natural nas conversas
+- Seja amigável, acolhedora e motivadora
+- Foque em nutrição, alimentação saudável e bem-estar
+- Use emojis moderadamente para deixar a conversa mais leve
+- Dê dicas práticas e personalizadas
+- Sempre encoraje hábitos saudáveis
+
+⚠️ Importante:
+- Mantenha o foco em nutrição e saúde
+- Seja precisa mas acessível nas informações
+- Não dê conselhos médicos específicos
+- Encoraje a buscar profissionais quando necessário
+- Seja sempre positiva e motivadora
+
+Lembre-se: Você é a parceira nutricional de {nome_exibicao}! 😊"""
 
 class ChatSendPayload(BaseModel):
     message: str = Field(..., description="Texto que o usuário enviou")
@@ -30,11 +55,38 @@ def send_to_ai(
     Envia a mensagem do usuário para a OpenAI e retorna a resposta.
     """
     try:
+        # Obter informações do usuário
+        username = current_user.get("username")
+        nome = current_user.get("nome")
+        
+        # Buscar histórico de chat do usuário
+        history = current_user.get("chat_history") or []
+        
+        # Preparar mensagens para a API
+        messages = [{"role": "system", "content": get_lina_chat_prompt(username, nome)}]
+        
+        # Adicionar histórico (últimas 10 mensagens para não estourar o limite)
+        for msg in history[-10:]:
+            messages.append({
+                "role": msg["role"], 
+                "content": msg["text"]
+            })
+        
+        # Adicionar mensagem atual do usuário
+        messages.append({
+            "role": "user", 
+            "content": payload.message
+        })
+
         resp = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": payload.message}],
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=500,
+            temperature=0.7
         )
+        
         content = resp.choices[0].message.content.strip()
+        
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -44,10 +96,16 @@ def send_to_ai(
     # Salva a resposta no histórico do usuário
     history = current_user.get("chat_history") or []
     history.append({
-        "role": "bot",
+        "role": "user",
+        "text": payload.message,
+        "created_at": datetime.utcnow().isoformat(),
+    })
+    history.append({
+        "role": "assistant", 
         "text": content,
         "created_at": datetime.utcnow().isoformat(),
     })
+    
     current_user["chat_history"] = history
     salvar_usuario(current_user)
 
