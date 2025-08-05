@@ -1,7 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
-from app.auth import SECRET_KEY, ALGORITHM
+from app.auth import get_current_username  # Importar a função do auth.py
 import openai
 import os
 from dotenv import load_dotenv
@@ -12,22 +10,6 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 router = APIRouter()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/user/login")
-
-def get_current_username(token: str = Depends(oauth2_scheme)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Token inválido ou expirado",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        return username
-    except JWTError:
-        raise credentials_exception
 
 def get_lina_prompt(username: str) -> str:
     """Retorna o prompt personalizado da Lina com o nome do usuário"""
@@ -63,33 +45,45 @@ async def analyze_image(
     file: UploadFile = File(...), 
     username: str = Depends(get_current_username)
 ):
-    # Lê o arquivo enviado
-    image_bytes = await file.read()
-    # Codifica em base64
-    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-    # Descobre o tipo da imagem (opcional, mas bom para PNG/JPEG)
-    content_type = file.content_type  # Exemplo: "image/jpeg"
-    if content_type is None:
-        content_type = "image/jpeg"
-    data_url = f"data:{content_type};base64,{image_base64}"
+    try:
+        # Lê o arquivo enviado
+        image_bytes = await file.read()
+        # Codifica em base64
+        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+        # Descobre o tipo da imagem (opcional, mas bom para PNG/JPEG)
+        content_type = file.content_type  # Exemplo: "image/jpeg"
+        if content_type is None:
+            content_type = "image/jpeg"
+        data_url = f"data:{content_type};base64,{image_base64}"
 
-    # Envia para o GPT-4o Vision (OpenAI)
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": get_lina_prompt(username)},
-            {"role": "user", "content": [
-                {"type": "text", "text": "Analise nutricionalmente esse prato:"},
-                {"type": "image_url", "image_url": {"url": data_url}}
-            ]}
-        ],
-        max_tokens=700,
-        temperature=0.2
-    )
-    resultado = response.choices[0].message.content
+        # Debug: verificar se o username está chegando
+        print(f"DEBUG: Username recebido: {username}")
+        
+        # Gerar o prompt da Lina
+        lina_system_prompt = get_lina_prompt(username)
+        print(f"DEBUG: Prompt gerado para {username}")
 
-    return {
-        "usuario": username,
-        "analise": resultado
-    }
+        # Envia para o GPT-4o Vision (OpenAI)
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": lina_system_prompt},
+                {"role": "user", "content": [
+                    {"type": "text", "text": f"Olá Lina! Sou o {username}. Analise nutricionalmente esse prato que estou compartilhando com você:"},
+                    {"type": "image_url", "image_url": {"url": data_url}}
+                ]}
+            ],
+            max_tokens=800,
+            temperature=0.3
+        )
+        resultado = response.choices[0].message.content
+
+        return {
+            "usuario": username,
+            "analise": resultado
+        }
+    
+    except Exception as e:
+        print(f"Erro na análise: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao analisar imagem: {str(e)}")
