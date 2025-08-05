@@ -1,4 +1,5 @@
 # app/endpoints/webhook.py
+
 from fastapi import APIRouter, Request, HTTPException, Header
 import hmac
 import hashlib
@@ -6,10 +7,8 @@ import os
 
 from app.db import grant_user_access  # Função que garante acesso no DB
 
-router = APIRouter(
-    prefix="/api/webhook",
-    tags=["webhook"],
-)
+# Apenas tags aqui; o prefixo vem do main.py
+router = APIRouter(tags=["webhook"])
 
 DISRUPTY_WEBHOOK_SECRET = os.getenv("DISRUPTY_WEBHOOK_SECRET")
 if not DISRUPTY_WEBHOOK_SECRET:
@@ -32,12 +31,9 @@ async def disrupty_payment_webhook(
 
     event = await request.json()
     if event.get("type") == "payment.success":
-        data = event.get("data", {})
-        metadata = data.get("metadata", {})
-        user_id = metadata.get("user_id")
+        user_id = event.get("data", {}).get("metadata", {}).get("user_id")
         if not user_id:
             raise HTTPException(status_code=400, detail="user_id não encontrado em metadata")
-
         await grant_user_access(user_id)
 
     return {"status": "ok"}
