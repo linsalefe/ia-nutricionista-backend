@@ -4,8 +4,8 @@ import openai
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from openai import OpenAI  # nova interface v1+
-from app.auth import get_current_user
-from app.db import salvar_usuario
+from app.auth import get_current_username  # Importar a função do auth.py
+from app.db import salvar_chat_message, buscar_chat_history
 
 # Inicializa o cliente com sua chave de .env
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -49,32 +49,32 @@ class ChatResponse(BaseModel):
 @router.post("/send", response_model=ChatResponse)
 def send_to_ai(
     payload: ChatSendPayload,
-    current_user: dict = Depends(get_current_user),
+    username: str = Depends(get_current_username),
 ):
     """
     Envia a mensagem do usuário para a OpenAI e retorna a resposta.
     """
     try:
-        # Obter informações do usuário
-        username = current_user.get("username")
-        nome = current_user.get("nome")
-        
         # DEBUG: Verificar se os dados chegaram
-        print(f"🔍 DEBUG - Username: {username}, Nome: {nome}")
+        print(f"🔍 DEBUG - Username: {username}")
         
-        # Buscar histórico de chat do usuário
-        history = current_user.get("chat_history") or []
+        # Buscar histórico de chat do usuário (últimas 10 mensagens)
+        history = buscar_chat_history(username, limit=10)
         
         # Gerar prompt personalizado da Lina
+        from app.db import buscar_usuario
+        user_data = buscar_usuario(username)
+        nome = user_data.get("nome") if user_data else None
+        
         lina_prompt = get_lina_chat_prompt(username, nome)
         print(f"🔍 DEBUG - Prompt da Lina gerado para {username}")
-        print(f"🔍 DEBUG - Primeiras 100 chars do prompt: {lina_prompt[:100]}...")
+        print(f"🔍 DEBUG - Nome do usuário: {nome}")
         
         # Preparar mensagens para a API
         messages = [{"role": "system", "content": lina_prompt}]
         
-        # Adicionar histórico (últimas 10 mensagens para não estourar o limite)
-        for msg in history[-10:]:
+        # Adicionar histórico
+        for msg in history:
             messages.append({
                 "role": msg["role"], 
                 "content": msg["text"]
@@ -87,7 +87,6 @@ def send_to_ai(
         })
 
         print(f"🔍 DEBUG - Total de mensagens enviadas para OpenAI: {len(messages)}")
-        print(f"🔍 DEBUG - Primeira mensagem (system): {messages[0]['content'][:50]}...")
 
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -99,27 +98,15 @@ def send_to_ai(
         content = resp.choices[0].message.content.strip()
         print(f"🔍 DEBUG - Resposta da OpenAI: {content[:100]}...")
         
+        # Salvar mensagens no histórico
+        salvar_chat_message(username, "user", payload.message, "text")
+        salvar_chat_message(username, "assistant", content, "text")
+        
+        return ChatResponse(response=content)
+        
     except Exception as e:
         print(f"❌ ERRO: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Erro ao conectar com a IA: {e}"
         )
-
-    # Salva a resposta no histórico do usuário
-    history = current_user.get("chat_history") or []
-    history.append({
-        "role": "user",
-        "text": payload.message,
-        "created_at": datetime.utcnow().isoformat(),
-    })
-    history.append({
-        "role": "assistant", 
-        "text": content,
-        "created_at": datetime.utcnow().isoformat(),
-    })
-    
-    current_user["chat_history"] = history
-    salvar_usuario(current_user)
-
-    return ChatResponse(response=content)

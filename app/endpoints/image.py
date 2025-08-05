@@ -4,7 +4,7 @@ import openai
 import os
 from dotenv import load_dotenv
 import base64
-from app.utils.metrics import compute_bmi, compute_progress
+from app.db import salvar_meal_analysis
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -78,6 +78,9 @@ async def analyze_image(
             temperature=0.3
         )
         resultado = response.choices[0].message.content
+
+        # Salvar análise no banco de meals
+        salvar_meal_analysis(username, resultado, file.filename)
 
         return {
             "usuario": username,
