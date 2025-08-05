@@ -1,4 +1,4 @@
-# 1app/endpoints/user.py
+# app/endpoints/user.py
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
