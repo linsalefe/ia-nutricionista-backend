@@ -120,22 +120,31 @@ def get_chat_history(username: str = Depends(get_current_username)):
     Retorna o histórico de chat do usuário
     """
     try:
+        print(f"🔍 Buscando histórico para: {username}")
         history = buscar_chat_history(username, limit=50)
+        
+        # Garantir que history é sempre uma lista
+        if not isinstance(history, list):
+            history = []
         
         # Converter para formato que o frontend espera
         formatted_history = []
         for msg in history:
-            formatted_history.append({
-                "role": msg["role"],
-                "text": msg["text"],
-                "type": "text",
-                "created_at": msg.get("created_at", "")
-            })
+            if isinstance(msg, dict):
+                formatted_history.append({
+                    "role": msg.get("role", "user"),
+                    "text": msg.get("text", ""),
+                    "type": msg.get("type", "text"),
+                    "imageUrl": msg.get("imageUrl"),
+                    "created_at": msg.get("created_at", "")
+                })
         
+        print(f"✅ Histórico formatado: {len(formatted_history)} mensagens")
         return ChatHistoryResponse(history=formatted_history)
         
     except Exception as e:
         print(f"❌ ERRO ao buscar histórico: {str(e)}")
+        # Sempre retornar array vazio em caso de erro
         return ChatHistoryResponse(history=[])
 
 @router.post("/save")
