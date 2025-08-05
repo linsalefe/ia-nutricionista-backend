@@ -94,10 +94,14 @@ def send_to_ai(
         
         # Adicionar histórico
         for msg in history:
-            messages.append({
-                "role": msg["role"], 
-                "content": msg["text"]
-            })
+            # Verificar se msg tem as propriedades necessárias
+            if isinstance(msg, dict) and "role" in msg and "text" in msg:
+                messages.append({
+                    "role": msg["role"], 
+                    "content": msg["text"]
+                })
+            else:
+                print(f"⚠️ Mensagem do histórico sem formato correto: {msg}")
         
         # Adicionar mensagem atual do usuário
         messages.append({
