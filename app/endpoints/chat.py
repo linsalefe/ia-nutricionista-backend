@@ -59,11 +59,19 @@ def send_to_ai(
         username = current_user.get("username")
         nome = current_user.get("nome")
         
+        # DEBUG: Verificar se os dados chegaram
+        print(f"🔍 DEBUG - Username: {username}, Nome: {nome}")
+        
         # Buscar histórico de chat do usuário
         history = current_user.get("chat_history") or []
         
+        # Gerar prompt personalizado da Lina
+        lina_prompt = get_lina_chat_prompt(username, nome)
+        print(f"🔍 DEBUG - Prompt da Lina gerado para {username}")
+        print(f"🔍 DEBUG - Primeiras 100 chars do prompt: {lina_prompt[:100]}...")
+        
         # Preparar mensagens para a API
-        messages = [{"role": "system", "content": get_lina_chat_prompt(username, nome)}]
+        messages = [{"role": "system", "content": lina_prompt}]
         
         # Adicionar histórico (últimas 10 mensagens para não estourar o limite)
         for msg in history[-10:]:
@@ -78,6 +86,9 @@ def send_to_ai(
             "content": payload.message
         })
 
+        print(f"🔍 DEBUG - Total de mensagens enviadas para OpenAI: {len(messages)}")
+        print(f"🔍 DEBUG - Primeira mensagem (system): {messages[0]['content'][:50]}...")
+
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
@@ -86,8 +97,10 @@ def send_to_ai(
         )
         
         content = resp.choices[0].message.content.strip()
+        print(f"🔍 DEBUG - Resposta da OpenAI: {content[:100]}...")
         
     except Exception as e:
+        print(f"❌ ERRO: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Erro ao conectar com a IA: {e}"
