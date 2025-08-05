@@ -28,7 +28,12 @@ new_user = {
     'id': str(uuid.uuid4()),
     'username': username,
     'password': hash_senha,
-    'password_hash': hash_senha,
+    'nome': None,
+    'objetivo': None,
+    'height_cm': None,
+    'initial_weight': None,
+    'weight_logs': [],
+    'refeicoes': [],
     'has_access': True,
     'is_admin': True,
 }
