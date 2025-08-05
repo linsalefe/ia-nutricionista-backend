@@ -1,3 +1,5 @@
+# src/endpoints/user.py
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
@@ -6,7 +8,7 @@ from uuid import uuid4
 from app.auth import get_current_user, create_access_token, verify_password, hash_password
 from app.db import buscar_usuario, salvar_usuario
 
-router = APIRouter(tags=["user"])
+router = APIRouter(prefix="/api/user", tags=["user"])
 
 
 class UserSignup(BaseModel):
@@ -59,6 +61,8 @@ def signup(data: UserSignup):
         "initial_weight": data.initial_weight,
         "weight_logs": [],
         "refeicoes": [],
+        "has_access": False,
+        "is_admin": False
     }
     salvar_usuario(user)
     return {"msg": "Usuário criado com sucesso"}
@@ -67,27 +71,25 @@ def signup(data: UserSignup):
 @router.post("/login", response_model=TokenOut)
 def login(data: UserLogin):
     user = buscar_usuario(data.username)
-    if not user or not verify_password(data.password, user["password"]):
+    if not user or not verify_password(data.password, user.get("password", "")):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais inválidas",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = create_access_token({"sub": user["username"], "nome": user.get("nome")})
+    token = create_access_token({"sub": user["username"]})
     return TokenOut(access_token=token)
 
 
 @router.get("/me", response_model=UserOut)
 def get_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
-    user = current_user.copy()
-    user.pop("password", None)
     return UserOut(
-        id=user.get("id", user["username"]),
-        username=user["username"],
-        nome=user.get("nome"),
-        objetivo=user.get("objetivo"),
-        height_cm=user.get("height_cm"),
-        initial_weight=user.get("initial_weight"),
+        id=current_user.get("id", current_user["username"]),
+        username=current_user["username"],
+        nome=current_user.get("nome"),
+        objetivo=current_user.get("objetivo"),
+        height_cm=current_user.get("height_cm"),
+        initial_weight=current_user.get("initial_weight"),
     )
 
 
