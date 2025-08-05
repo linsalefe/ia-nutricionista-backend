@@ -7,8 +7,15 @@ from openai import OpenAI  # nova interface v1+
 from app.auth import get_current_username  # Importar a função do auth.py
 from app.db import salvar_chat_message, buscar_chat_history
 
+# Verificar se a chave existe
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    print("❌ ERRO: OPENAI_API_KEY não está definida no .env")
+else:
+    print(f"✅ OpenAI API Key encontrada: {api_key[:10]}...")
+
 # Inicializa o cliente com sua chave de .env
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=api_key)
 
 # Router sem prefix interno; prefix será aplicado em main.py
 router = APIRouter(
@@ -60,9 +67,18 @@ def send_to_ai(
     try:
         # DEBUG: Verificar se os dados chegaram
         print(f"🔍 DEBUG - Username: {username}")
+        print(f"🔍 DEBUG - Mensagem recebida: {payload.message}")
+        
+        # Verificar se a API key está disponível
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="OpenAI API key não configurada"
+            )
         
         # Buscar histórico de chat do usuário (últimas 10 mensagens)
         history = buscar_chat_history(username, limit=10)
+        print(f"🔍 DEBUG - Histórico encontrado: {len(history)} mensagens")
         
         # Gerar prompt personalizado da Lina
         from app.db import buscar_usuario
@@ -90,6 +106,7 @@ def send_to_ai(
         })
 
         print(f"🔍 DEBUG - Total de mensagens enviadas para OpenAI: {len(messages)}")
+        print(f"🔍 DEBUG - Chamando OpenAI API...")
 
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -99,19 +116,34 @@ def send_to_ai(
         )
         
         content = resp.choices[0].message.content.strip()
-        print(f"🔍 DEBUG - Resposta da OpenAI: {content[:100]}...")
+        print(f"🔍 DEBUG - Resposta da OpenAI recebida: {content[:100]}...")
         
         # Salvar mensagens no histórico
         salvar_chat_message(username, "user", payload.message, "text")
         salvar_chat_message(username, "assistant", content, "text")
+        print(f"🔍 DEBUG - Mensagens salvas no histórico")
         
         return ChatResponse(response=content)
         
-    except Exception as e:
-        print(f"❌ ERRO: {str(e)}")
+    except openai.AuthenticationError as e:
+        print(f"❌ ERRO de autenticação OpenAI: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Erro ao conectar com a IA: {e}"
+            detail="Erro de autenticação com OpenAI. Verifique a API key."
+        )
+    except openai.APIError as e:
+        print(f"❌ ERRO da API OpenAI: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Erro da API OpenAI: {str(e)}"
+        )
+    except Exception as e:
+        print(f"❌ ERRO geral: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Erro ao conectar com a IA: {str(e)}"
         )
 
 @router.get("/history", response_model=ChatHistoryResponse)
