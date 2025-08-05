@@ -46,6 +46,9 @@ class ChatSendPayload(BaseModel):
 class ChatResponse(BaseModel):
     response: str
 
+class ChatHistoryResponse(BaseModel):
+    history: list
+
 @router.post("/send", response_model=ChatResponse)
 def send_to_ai(
     payload: ChatSendPayload,
@@ -109,4 +112,52 @@ def send_to_ai(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Erro ao conectar com a IA: {e}"
+        )
+
+@router.get("/history", response_model=ChatHistoryResponse)
+def get_chat_history(username: str = Depends(get_current_username)):
+    """
+    Retorna o histórico de chat do usuário
+    """
+    try:
+        history = buscar_chat_history(username, limit=50)
+        
+        # Converter para formato que o frontend espera
+        formatted_history = []
+        for msg in history:
+            formatted_history.append({
+                "role": msg["role"],
+                "text": msg["text"],
+                "type": "text",
+                "created_at": msg.get("created_at", "")
+            })
+        
+        return ChatHistoryResponse(history=formatted_history)
+        
+    except Exception as e:
+        print(f"❌ ERRO ao buscar histórico: {str(e)}")
+        return ChatHistoryResponse(history=[])
+
+@router.post("/save")
+def save_chat_message(
+    message_data: dict,
+    username: str = Depends(get_current_username)
+):
+    """
+    Salva uma mensagem de chat (compatibilidade com frontend)
+    """
+    try:
+        role = message_data.get("role", "user")
+        text = message_data.get("text", "")
+        message_type = message_data.get("type", "text")
+        
+        salvar_chat_message(username, role, text, message_type)
+        
+        return {"status": "success", "message": "Mensagem salva"}
+        
+    except Exception as e:
+        print(f"❌ ERRO ao salvar mensagem: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao salvar mensagem: {e}"
         )
