@@ -45,6 +45,7 @@ class UserOut(BaseModel):
     objetivo: Optional[str]
     height_cm: Optional[float]
     initial_weight: Optional[float]
+    has_access: bool  # Incluído para indicar acesso
 
 
 @router.post("/signup", status_code=201)
@@ -98,6 +99,7 @@ def get_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
         objetivo=current_user.get("objetivo"),
         height_cm=current_user.get("height_cm"),
         initial_weight=current_user.get("initial_weight"),
+        has_access=current_user.get("has_access", False),  # Incluído o campo
     )
 
 
@@ -118,4 +120,5 @@ def update_profile(
         objetivo=current_user.get("objetivo"),
         height_cm=current_user.get("height_cm"),
         initial_weight=current_user.get("initial_weight"),
+        has_access=current_user.get("has_access", False),
     )
