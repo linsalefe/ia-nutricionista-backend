@@ -21,13 +21,13 @@ from app.endpoints.webhook import router as webhook_router  # webhook Disrupty
 # Inicializa app
 app = FastAPI(title="IA Nutricionista SaaS", version="0.1.0")
 
-# Configurações de CORS
+# Configurações de CORS (incluindo o domínio do backend)
 origins = [
     "https://app-nutriflow.onrender.com",
+    "https://back-nutriflow-ycr2.onrender.com",  # backend no Render
     "http://localhost:5173",
     "http://localhost:4173",
 ]
-# Em produção, remova o "*" e use apenas your domínio
 
 app.add_middleware(
     CORSMiddleware,
