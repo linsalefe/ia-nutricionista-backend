@@ -8,7 +8,7 @@ from uuid import uuid4
 from app.auth import get_current_user, create_access_token, verify_password, hash_password
 from app.db import buscar_usuario, salvar_usuario
 
-router = APIRouter(tags=["user"])
+router = APIRouter(prefix="/api/user", tags=["user"])
 
 
 class UserSignup(BaseModel):
@@ -54,7 +54,8 @@ def signup(data: UserSignup):
     user = {
         "id": str(uuid4()),
         "username": data.username,
-        "password_hash": hashed,
+        # usamos 'password' para cadastro via API
+        "password": hashed,
         "nome": data.nome,
         "objetivo": data.objetivo,
         "height_cm": data.height_cm,
@@ -71,7 +72,15 @@ def signup(data: UserSignup):
 @router.post("/login", response_model=TokenOut)
 def login(data: UserLogin):
     user = buscar_usuario(data.username)
-    if not user or not verify_password(data.password, user.get("password_hash", "")):
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # pode vir 'password' ou 'password_hash' dependendo da origem
+    stored_password = user.get("password") or user.get("password_hash")
+    if not verify_password(data.password, stored_password or ""):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais inválidas",

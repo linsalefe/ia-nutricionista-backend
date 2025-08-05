@@ -158,6 +158,12 @@
       "username": "alefelins",
       "password_hash": "$2b$12$alqEG7VjSkFI8xbzAOtMweN/rdV6hUvBaZ5qK5QFfoh7meL7FRgGC",
       "is_admin": true
+    },
+    {
+      "id": "0fbdae76-7136-49ca-a668-441d247a70ff",
+      "username": "linsalefe",
+      "password_hash": "$2b$12$o0Mk6K/G0840aw4yTsGGJ.w.JHnjaKfCl1DLLi9fzWYSlnADCxNS6",
+      "is_admin": true
     }
   ]
 }
