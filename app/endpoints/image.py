@@ -29,27 +29,9 @@ def get_current_username(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
 
-@router.post("/analyze")
-async def analyze_image(
-    file: UploadFile = File(...), 
-    username: str = Depends(get_current_username)
-):
-    # Lê o arquivo enviado
-    image_bytes = await file.read()
-    # Codifica em base64
-    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-    # Descobre o tipo da imagem (opcional, mas bom para PNG/JPEG)
-    content_type = file.content_type  # Exemplo: "image/jpeg"
-    if content_type is None:
-        content_type = "image/jpeg"
-    data_url = f"data:{content_type};base64,{image_base64}"
-
-    # Envia para o GPT-4o Vision (OpenAI)
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": f"""Você é a Lina, assistente nutricional da NutriFlow. O usuário {username} está compartilhando uma refeição com você.
+def get_lina_prompt(username: str) -> str:
+    """Retorna o prompt personalizado da Lina com o nome do usuário"""
+    return f"""Você é a Lina, assistente nutricional da NutriFlow. O usuário {username} está compartilhando uma refeição com você.
 
 🎯 Sua missão: Ajudar {username} a alcançar seus objetivos através de uma alimentação consciente.
 
@@ -74,7 +56,29 @@ async def analyze_image(
 - Foque APENAS em nutrição e alimentação saudável
 - Use emojis moderadamente para tornar a conversa mais leve
 
-Lembre-se: Você é a companheira nutricional de {username}, sempre positiva e encorajadora! 😊"""},
+Lembre-se: Você é a companheira nutricional de {username}, sempre positiva e encorajadora! 😊"""
+
+@router.post("/analyze")
+async def analyze_image(
+    file: UploadFile = File(...), 
+    username: str = Depends(get_current_username)
+):
+    # Lê o arquivo enviado
+    image_bytes = await file.read()
+    # Codifica em base64
+    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+    # Descobre o tipo da imagem (opcional, mas bom para PNG/JPEG)
+    content_type = file.content_type  # Exemplo: "image/jpeg"
+    if content_type is None:
+        content_type = "image/jpeg"
+    data_url = f"data:{content_type};base64,{image_base64}"
+
+    # Envia para o GPT-4o Vision (OpenAI)
+    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": get_lina_prompt(username)},
             {"role": "user", "content": [
                 {"type": "text", "text": "Analise nutricionalmente esse prato:"},
                 {"type": "image_url", "image_url": {"url": data_url}}
