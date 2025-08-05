@@ -8,7 +8,7 @@ from uuid import uuid4
 from app.auth import get_current_user, create_access_token, verify_password, hash_password
 from app.db import buscar_usuario, salvar_usuario
 
-router = APIRouter(prefix="/api/user", tags=["user"])
+router = APIRouter(tags=["user"])
 
 
 class UserSignup(BaseModel):
