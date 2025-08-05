@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-import json
 import os
+import json
 import uuid
 import getpass
 from passlib.hash import bcrypt
 
-# Caminho do seu DB JSON\BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Diretório base e caminho do DB
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'db.json')
 
 # Carrega o JSON
@@ -30,13 +31,14 @@ new_user = {
     'id': str(uuid.uuid4()),
     'username': username,
     'password_hash': hash_senha,
-    'password': hash_senha,  # compatibilidade login
+    'password': hash_senha,   # compatibilidade login
     'is_admin': True,
-    'has_access': True      # admin com acesso
+    'has_access': True
 }
 
 db['users'].append(new_user)
 
+# Salva de volta no JSON
 with open(DB_PATH, 'w', encoding='utf-8') as f:
     json.dump(db, f, indent=2, ensure_ascii=False)
 
