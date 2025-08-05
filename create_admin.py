@@ -5,8 +5,7 @@ import uuid
 import getpass
 from passlib.hash import bcrypt
 
-# Caminho do seu DB JSON
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Caminho do seu DB JSON\BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'db.json')
 
 # Carrega o JSON
@@ -31,7 +30,9 @@ new_user = {
     'id': str(uuid.uuid4()),
     'username': username,
     'password_hash': hash_senha,
-    'is_admin': True
+    'password': hash_senha,  # compatibilidade login
+    'is_admin': True,
+    'has_access': True      # admin com acesso
 }
 
 db['users'].append(new_user)
