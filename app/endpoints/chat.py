@@ -92,12 +92,14 @@ def send_to_ai(
         # Preparar mensagens para a API
         messages = [{"role": "system", "content": lina_prompt}]
         
-        # Adicionar histórico
+        # Adicionar histórico (mapear "bot" para "assistant")
         for msg in history:
-            # Verificar se msg tem as propriedades necessárias
             if isinstance(msg, dict) and "role" in msg and "text" in msg:
+                role = msg["role"]
+                if role == "bot":
+                    role = "assistant"
                 messages.append({
-                    "role": msg["role"], 
+                    "role": role,
                     "content": msg["text"]
                 })
             else:
