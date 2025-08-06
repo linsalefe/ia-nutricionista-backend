@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-from app.db import grant_user_access, buscar_usuario_by_id  # Funções do DB
+from app.db import grant_user_access, buscar_usuario  # Função correta do DB
 
 router = APIRouter(tags=["webhook"])
 
@@ -77,7 +77,7 @@ async def disrupty_payment_webhook(
         await grant_user_access(user_id)
 
         # 4) Busca usuário para pegar e-mail
-        user = buscar_usuario_by_id(user_id)
+        user = buscar_usuario(user_id)
         email = user.get("username")
         if email:
             # 5) Agenda envio de e-mail em background
