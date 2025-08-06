@@ -6,7 +6,7 @@ import hashlib
 from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
 import resend
 
-from app.db import grant_user_access, buscar_usuario
+from app.db import grant_user_access, buscar_usuario_by_id
 
 router = APIRouter(tags=["webhook"])
 
@@ -73,10 +73,11 @@ async def disrupty_payment_webhook(
         await grant_user_access(user_id)
 
         # 4) Busca usuário para pegar e-mail
-        user = buscar_usuario(user_id)
-        email = user.get("username")
-        if email:
-            # 5) Agenda envio de e-mail em background
-            background_tasks.add_task(send_access_email, email)
+        user = buscar_usuario_by_id(user_id)
+        if user:
+            email = user.get("username")  # username é o email
+            if email:
+                # 5) Agenda envio de e-mail em background
+                background_tasks.add_task(send_access_email, email)
 
     return {"status": "ok"}
