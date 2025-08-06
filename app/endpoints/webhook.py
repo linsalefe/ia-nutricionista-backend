@@ -3,7 +3,6 @@
 import os
 import hmac
 import hashlib
-import logging
 from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
@@ -11,9 +10,6 @@ from sendgrid.helpers.mail import Mail
 from app.db import grant_user_access, buscar_usuario  # Função correta do DB
 
 router = APIRouter(tags=["webhook"])
-
-# Configuração de logs
-logger = logging.getLogger("uvicorn.error")
 
 # Carrega segredos do .env
 DISRUPTY_WEBHOOK_SECRET = os.getenv("DISRUPTY_WEBHOOK_SECRET")
@@ -25,12 +21,11 @@ if not DISRUPTY_WEBHOOK_SECRET:
 if not SENDGRID_API_KEY or not FROM_EMAIL:
     raise RuntimeError("❌ SENDGRID_API_KEY ou FROM_EMAIL não definidos no .env")
 
-# Instancia cliente SendGrid
 sg_client = SendGridAPIClient(SENDGRID_API_KEY)
 
 async def send_access_email(to_email: str):
     """
-    Envia um e-mail via SendGrid notificando liberação de acesso e registra o resultado nos logs.
+    Envia um e-mail via SendGrid notificando liberação de acesso e força log no stdout.
     """
     message = Mail(
         from_email=FROM_EMAIL,
@@ -44,10 +39,11 @@ async def send_access_email(to_email: str):
     )
     try:
         response = sg_client.send(message)
-        logger.info(f"SendGrid status: {response.status_code}")
-        logger.info(f"SendGrid body: {response.body}")
+        # Logs explícitos para aparecer no console
+        print(f"[SendGrid] status: {response.status_code}", flush=True)
+        print(f"[SendGrid] body: {response.body}", flush=True)
     except Exception as e:
-        logger.error(f"Erro enviando e-mail: {e}")
+        print(f"[SendGrid] erro: {e}", flush=True)
 
 @router.post("/payment")
 async def disrupty_payment_webhook(
