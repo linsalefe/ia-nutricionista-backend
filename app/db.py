@@ -56,6 +56,18 @@ def buscar_usuario(username: str) -> dict | None:
         return None
 
 
+def buscar_usuario_by_id(user_id: str) -> dict | None:
+    """Busca um usuário pelo ID no banco principal"""
+    result = db.search(User.id == user_id)
+    if result:
+        user = result[0]
+        print(f"✅ Usuário ID {user_id} encontrado no banco")
+        return user
+    else:
+        print(f"❌ Usuário ID {user_id} não encontrado")
+        return None
+
+
 async def grant_user_access(user_id: str) -> None:
     """
     Concede acesso ao usuário (seta has_access = True).
