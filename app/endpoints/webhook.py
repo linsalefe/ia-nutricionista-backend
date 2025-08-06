@@ -69,15 +69,22 @@ async def disrupty_payment_webhook(
         if not user_id:
             raise HTTPException(status_code=400, detail="user_id não encontrado em metadata")
 
-        # 3) Concede acesso no DB
-        await grant_user_access(user_id)
-
-        # 4) Busca usuário para pegar e-mail
+        # 3) Busca usuário primeiro
         user = buscar_usuario_by_id(user_id)
-        if user:
-            email = user.get("username")  # username é o email
-            if email:
-                # 5) Agenda envio de e-mail em background
-                background_tasks.add_task(send_access_email, email)
+        if not user:
+            print(f"❌ Usuário {user_id} não encontrado no DB")
+            return {"status": "user_not_found"}
+
+        # 4) Concede acesso no DB
+        try:
+            await grant_user_access(user_id)
+        except Exception as e:
+            print(f"❌ Erro ao conceder acesso: {e}")
+            return {"status": "error", "message": str(e)}
+
+        # 5) Envia email
+        email = user.get("username")  # username é o email
+        if email:
+            background_tasks.add_task(send_access_email, email)
 
     return {"status": "ok"}
