@@ -1,0 +1,6 @@
+{
+  "type": "payment.success",
+  "data": {
+    "metadata": { "user_id": "ba8254e3-b75b-4522-97a8-aeb977a02126" }
+  }
+}
