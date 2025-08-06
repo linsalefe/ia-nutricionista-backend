@@ -1,9 +1,10 @@
 # app/endpoints/webhook.py
 
-from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
+import os
 import hmac
 import hashlib
-import os
+import logging
+from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
@@ -11,22 +12,25 @@ from app.db import grant_user_access, buscar_usuario_by_id  # Funções do DB
 
 router = APIRouter(tags=["webhook"])
 
-# Carrega segredos e configurações do .env
+# Configuração de logs
+logger = logging.getLogger("uvicorn.error")
+
+# Carrega segredos do .env
 DISRUPTY_WEBHOOK_SECRET = os.getenv("DISRUPTY_WEBHOOK_SECRET")
-SENDGRID_API_KEY         = os.getenv("SENDGRID_API_KEY")
-FROM_EMAIL               = os.getenv("FROM_EMAIL")
+SENDGRID_API_KEY        = os.getenv("SENDGRID_API_KEY")
+FROM_EMAIL              = os.getenv("FROM_EMAIL")
 
 if not DISRUPTY_WEBHOOK_SECRET:
     raise RuntimeError("❌ DISRUPTY_WEBHOOK_SECRET não definida no .env")
 if not SENDGRID_API_KEY or not FROM_EMAIL:
     raise RuntimeError("❌ SENDGRID_API_KEY ou FROM_EMAIL não definidos no .env")
 
-# Cliente SendGrid
+# Instancia cliente SendGrid
 sg_client = SendGridAPIClient(SENDGRID_API_KEY)
 
 async def send_access_email(to_email: str):
     """
-    Envia um e-mail via SendGrid notificando liberação de acesso.
+    Envia um e-mail via SendGrid notificando liberação de acesso e registra o resultado nos logs.
     """
     message = Mail(
         from_email=FROM_EMAIL,
@@ -38,7 +42,12 @@ async def send_access_email(to_email: str):
             "<p>Obrigado,<br/>Equipe NutriFlow</p>"
         )
     )
-    sg_client.send(message)
+    try:
+        response = sg_client.send(message)
+        logger.info(f"SendGrid status: {response.status_code}")
+        logger.info(f"SendGrid body: {response.body}")
+    except Exception as e:
+        logger.error(f"Erro enviando e-mail: {e}")
 
 @router.post("/payment")
 async def disrupty_payment_webhook(
@@ -57,7 +66,7 @@ async def disrupty_payment_webhook(
     if not hmac.compare_digest(expected_sig, x_signature):
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-    # 2) Processa evento
+    # 2) Processa evento JSON
     event = await request.json()
     if event.get("type") == "payment.success":
         user_id = event.get("data", {}).get("metadata", {}).get("user_id")
