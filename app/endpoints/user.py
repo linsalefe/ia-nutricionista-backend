@@ -4,7 +4,7 @@ import os
 from uuid import uuid4
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from pydantic import BaseModel, Field
 
 from app.auth import (
@@ -20,7 +20,8 @@ router = APIRouter(tags=["user"])
 
 # Diretório para uploads de avatar
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "avatars")
+UPLOADS_ROOT = os.path.join(BASE_DIR, "uploads")
+UPLOAD_DIR = os.path.join(UPLOADS_ROOT, "avatars")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
@@ -150,6 +151,7 @@ def update_profile(
 
 @router.post("/avatar")
 def upload_avatar(
+    request: Request,
     file: UploadFile = File(...),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
@@ -166,8 +168,9 @@ def upload_avatar(
     with open(fpath, "wb") as f:
         f.write(file.file.read())
 
-    # URL pública
-    public_url = f"/static/avatars/{fname}"
+    # URL ABSOLUTA usando a montagem /static (definida no main.py)
+    # Ex.: https://seu-backend.com/static/avatars/arquivo.png
+    public_url = str(request.url_for("static", path=f"avatars/{fname}"))
 
     # atualizar usuário
     current_user["avatar_url"] = public_url
