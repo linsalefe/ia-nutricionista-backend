@@ -28,23 +28,26 @@ from app.endpoints.webhook import router as webhook_router  # webhook Disrupty
 # Inicializa app
 app = FastAPI(title="IA Nutricionista SaaS", version="0.1.0")
 
-# Configurações de CORS
-origins = [
+# -------- CORS --------
+ALLOWED_ORIGINS = [
     os.getenv("FRONTEND_URL", "https://app-nutriflow.onrender.com"),
-    os.getenv("BACKEND_URL", "https://back-nutriflow-ycr2.onrender.com"),
     "http://localhost:5173",
     "http://localhost:4173",
+    "http://127.0.0.1:5173",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https?://(.+\.)?onrender\.com$",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],  # inclui Authorization
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=86400,
 )
 
-# Monta arquivos estáticos (acesso público a /static/avatars/...)
+# Static files (acesso público a /static/avatars/...)
 # IMPORTANTE: o nome "static" precisa bater com request.url_for("static", ...)
 app.mount("/static", StaticFiles(directory=UPLOADS_ROOT), name="static")
 
@@ -64,7 +67,7 @@ app.include_router(chat_router,         prefix="/api/chat",         tags=["chat"
 app.include_router(chat_history_router, prefix="/api/chat-history", tags=["chat-history"])
 app.include_router(image_router,        prefix="/api/image",        tags=["image"])
 
-# Rotas de refeição: singular (oficial) + plural (compat c/ front)
+# Rotas de refeição: singular (oficial) + plural (compat com front)
 app.include_router(meal_router,         prefix="/api/meal",         tags=["meal"])
 app.include_router(meal_router,         prefix="/api/meals",        tags=["meal-compat"])
 
