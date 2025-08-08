@@ -59,6 +59,11 @@ def read_root():
 def health():
     return {"status": "ok"}
 
+# Alias dentro de /api para facilitar ping de aquecimento do front
+@app.get("/api/health")
+def api_health():
+    return {"status": "ok"}
+
 # Registra routers
 app.include_router(user_router,         prefix="/api/user",         tags=["user"])
 app.include_router(dashboard_router,    prefix="/api/dashboard",    tags=["dashboard"])
