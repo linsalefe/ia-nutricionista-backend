@@ -63,5 +63,9 @@ app.include_router(weight_logs_router,  prefix="/api/weight-logs",  tags=["weigh
 app.include_router(chat_router,         prefix="/api/chat",         tags=["chat"])
 app.include_router(chat_history_router, prefix="/api/chat-history", tags=["chat-history"])
 app.include_router(image_router,        prefix="/api/image",        tags=["image"])
+
+# Rotas de refeição: singular (oficial) + plural (compat c/ front)
 app.include_router(meal_router,         prefix="/api/meal",         tags=["meal"])
+app.include_router(meal_router,         prefix="/api/meals",        tags=["meal-compat"])
+
 app.include_router(webhook_router,      prefix="/api/webhook",      tags=["webhook"])
