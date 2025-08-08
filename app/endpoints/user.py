@@ -114,7 +114,19 @@ def login(data: UserLogin):
 
 
 @router.get("/me", response_model=UserOut)
-def get_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
+def get_profile(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    # normaliza avatar para URL absoluta (cobre valores antigos salvos como /static/...)
+    avatar = current_user.get("avatar_url")
+    if avatar:
+        if avatar.startswith("http://") or avatar.startswith("https://"):
+            avatar_abs = avatar
+        else:
+            # remove prefixo "/static/" se existir e gera URL absoluta via url_for
+            rel = avatar.split("/static/", 1)[-1] if "/static/" in avatar else avatar.lstrip("/")
+            avatar_abs = str(request.url_for("static", path=rel))
+    else:
+        avatar_abs = None
+
     return UserOut(
         id=current_user.get("id", current_user["username"]),
         username=current_user["username"],
@@ -123,7 +135,7 @@ def get_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
         height_cm=current_user.get("height_cm"),
         initial_weight=current_user.get("initial_weight"),
         has_access=current_user.get("has_access", False),
-        avatar_url=current_user.get("avatar_url")
+        avatar_url=avatar_abs
     )
 
 
@@ -131,22 +143,16 @@ def get_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
 def update_profile(
     payload: UserUpdateIn,
     current_user: Dict[str, Any] = Depends(get_current_user),
+    request: Request = None
 ):
     updates = payload.dict(exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")
     current_user.update(updates)
     salvar_usuario(current_user)
-    return UserOut(
-        id=current_user.get("id", current_user["username"]),
-        username=current_user["username"],
-        nome=current_user.get("nome"),
-        objetivo=current_user.get("objetivo"),
-        height_cm=current_user.get("height_cm"),
-        initial_weight=current_user.get("initial_weight"),
-        has_access=current_user.get("has_access", False),
-        avatar_url=current_user.get("avatar_url")
-    )
+
+    # reaproveita a normalização do /me
+    return get_profile(request, current_user)  # type: ignore
 
 
 @router.post("/avatar")
@@ -168,8 +174,7 @@ def upload_avatar(
     with open(fpath, "wb") as f:
         f.write(file.file.read())
 
-    # URL ABSOLUTA usando a montagem /static (definida no main.py)
-    # Ex.: https://seu-backend.com/static/avatars/arquivo.png
+    # URL ABSOLUTA via /static
     public_url = str(request.url_for("static", path=f"avatars/{fname}"))
 
     # atualizar usuário
