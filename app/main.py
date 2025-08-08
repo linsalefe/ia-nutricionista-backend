@@ -1,18 +1,18 @@
 # app/main.py
 
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
-import os
 
 # Carrega variáveis de ambiente
 load_dotenv()
 
 # === Pastas para arquivos estáticos (avatars, etc.) ===
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-AVATARS_DIR = os.path.join(UPLOAD_DIR, "avatars")
+UPLOADS_ROOT = os.path.join(BASE_DIR, "uploads")
+AVATARS_DIR = os.path.join(UPLOADS_ROOT, "avatars")
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
 # Importa routers
@@ -45,7 +45,8 @@ app.add_middleware(
 )
 
 # Monta arquivos estáticos (acesso público a /static/avatars/...)
-app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
+# IMPORTANTE: o nome "static" precisa bater com request.url_for("static", ...)
+app.mount("/static", StaticFiles(directory=UPLOADS_ROOT), name="static")
 
 @app.get("/")
 def read_root():
