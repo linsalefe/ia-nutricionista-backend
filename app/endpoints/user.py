@@ -1,16 +1,32 @@
 # app/endpoints/user.py
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+import os
 from uuid import uuid4
+from typing import Optional, Dict, Any
 
-from app.auth import get_current_user, create_access_token, verify_password, hash_password
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from pydantic import BaseModel, Field
+
+from app.auth import (
+    get_current_user,
+    create_access_token,
+    verify_password,
+    hash_password
+)
 from app.db import buscar_usuario, salvar_usuario
 
-# Removido prefix duplicado; usaremos prefix em main.py
+# Router (prefixo vem do main.py)
 router = APIRouter(tags=["user"])
 
+# Diretório para uploads de avatar
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "avatars")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+# ============================
+# MODELS
+# ============================
 
 class UserSignup(BaseModel):
     username: str = Field(..., description="E-mail ou nome de usuário único")
@@ -45,8 +61,13 @@ class UserOut(BaseModel):
     objetivo: Optional[str]
     height_cm: Optional[float]
     initial_weight: Optional[float]
-    has_access: bool  # Incluído para indicar acesso
+    has_access: bool
+    avatar_url: Optional[str] = None
 
+
+# ============================
+# ENDPOINTS
+# ============================
 
 @router.post("/signup", status_code=201)
 def signup(data: UserSignup):
@@ -64,7 +85,8 @@ def signup(data: UserSignup):
         "weight_logs": [],
         "refeicoes": [],
         "has_access": False,
-        "is_admin": False
+        "is_admin": False,
+        "avatar_url": None
     }
     salvar_usuario(user)
     return {"msg": "Usuário criado com sucesso"}
@@ -99,7 +121,8 @@ def get_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
         objetivo=current_user.get("objetivo"),
         height_cm=current_user.get("height_cm"),
         initial_weight=current_user.get("initial_weight"),
-        has_access=current_user.get("has_access", False),  # Incluído o campo
+        has_access=current_user.get("has_access", False),
+        avatar_url=current_user.get("avatar_url")
     )
 
 
@@ -121,4 +144,33 @@ def update_profile(
         height_cm=current_user.get("height_cm"),
         initial_weight=current_user.get("initial_weight"),
         has_access=current_user.get("has_access", False),
+        avatar_url=current_user.get("avatar_url")
     )
+
+
+@router.post("/avatar")
+def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    # validação simples
+    if file.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
+        raise HTTPException(400, "Formato inválido. Use PNG/JPG/WEBP")
+
+    # nome único
+    ext = os.path.splitext(file.filename or "")[1].lower() or ".png"
+    fname = f"{current_user['username']}-{uuid4().hex}{ext}"
+    fpath = os.path.join(UPLOAD_DIR, fname)
+
+    # salvar no disco
+    with open(fpath, "wb") as f:
+        f.write(file.file.read())
+
+    # URL pública
+    public_url = f"/static/avatars/{fname}"
+
+    # atualizar usuário
+    current_user["avatar_url"] = public_url
+    salvar_usuario(current_user)
+
+    return {"ok": True, "avatar_url": public_url}
