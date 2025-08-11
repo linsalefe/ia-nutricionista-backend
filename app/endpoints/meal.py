@@ -1,39 +1,20 @@
 # app/endpoints/meal.py
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
 from pydantic import BaseModel, Field
+from sqlalchemy import select, delete
 
-from app.auth import SECRET_KEY, ALGORITHM
-from app.db import meals_db, Meal  # TinyDB Table e Query
+from app.auth import get_current_user  # retorna dict com dados do usuário
+from app.db import session_scope, User, MealAnalysis
 
 router = APIRouter(tags=["meal"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/user/login")
 
 
-# -------- Auth helper --------
-def get_current_username(token: str = Depends(oauth2_scheme)) -> str:
-    cred_exc = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Token inválido ou expirado",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: Optional[str] = payload.get("sub")
-        if not username:
-            raise cred_exc
-        return username
-    except JWTError:
-        raise cred_exc
-
-
-# -------- Schemas --------
+# ===== Schemas =====
 class MealIn(BaseModel):
-    analise: str = Field(..., description="Texto da análise nutricional")
+    analise: Dict[str, Any] = Field(..., description="Análise nutricional (objeto)")
     imagem_nome: Optional[str] = Field(None, description="Nome do arquivo salvo em /uploads")
 
 
@@ -43,55 +24,105 @@ class MealOut(MealIn):
     data: str
 
 
-# -------- Helpers --------
-def _now_iso() -> str:
-    return datetime.utcnow().isoformat()
+# ===== Helpers =====
+def _require_username(current_user: dict) -> str:
+    username = current_user.get("username") or current_user.get("sub")
+    if not username:
+        raise HTTPException(status_code=401, detail="Usuário não autenticado")
+    return username
 
 
-def _gen_id(username: str) -> str:
-    return f"{username}-{int(datetime.utcnow().timestamp() * 1000)}"
+def _meal_to_out(username: str, m: MealAnalysis) -> MealOut:
+    return MealOut(
+        id=str(m.id),
+        usuario=username,
+        analise=m.analysis or {},
+        imagem_nome=m.image_name,
+        data=m.created_at.isoformat(),
+    )
 
 
-# -------- Rotas base (casam com /api/meal e /api/meals) --------
+# ===== Rotas =====
 @router.get("", response_model=List[MealOut])
-def list_meals(username: str = Depends(get_current_username)):
-    """Lista refeições do usuário (mais recentes primeiro)"""
-    rows = meals_db.search(Meal.usuario == username)
-    rows.sort(key=lambda r: r.get("data", ""), reverse=True)
-    return rows
+def list_meals(
+    limit: int = 10,
+    current_user: dict = Depends(get_current_user),
+):
+    """Lista refeições do usuário (mais recentes primeiro)."""
+    username = _require_username(current_user)
+    with session_scope() as db:
+        u = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+        if not u:
+            return []
+        rows = (
+            db.execute(
+                select(MealAnalysis)
+                .where(MealAnalysis.user_id == u.id)
+                .order_by(MealAnalysis.created_at.desc())
+                .limit(limit)
+            )
+            .scalars()
+            .all()
+        )
+        return [_meal_to_out(username, r) for r in rows]
 
 
 @router.post("", response_model=MealOut, status_code=status.HTTP_201_CREATED)
-def create_meal(body: MealIn, username: str = Depends(get_current_username)):
-    """Cria uma refeição (mesmo comportamento de /save)"""
-    doc = {
-        "id": _gen_id(username),
-        "usuario": username,
-        "analise": body.analise,
-        "imagem_nome": body.imagem_nome,
-        "data": _now_iso(),
-    }
-    meals_db.insert(doc)
-    return doc
+def create_meal(
+    body: MealIn,
+    current_user: dict = Depends(get_current_user),
+):
+    """Cria uma refeição."""
+    username = _require_username(current_user)
+    now = datetime.utcnow()
+    with session_scope() as db:
+        u = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+        meal = MealAnalysis(
+            user_id=u.id,
+            analysis=body.analise,
+            image_name=body.imagem_nome,
+            created_at=now,
+        )
+        db.add(meal)
+        db.flush()  # garante ID
+        return _meal_to_out(username, meal)
 
 
 @router.delete("/{meal_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_meal(meal_id: str, username: str = Depends(get_current_username)):
-    """Remove uma refeição do usuário pelo id"""
-    deleted = meals_db.remove((Meal.usuario == username) & (Meal.id == meal_id))
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Refeição não encontrada")
-    return
+def delete_meal(
+    meal_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove uma refeição do usuário pelo ID (UUID)."""
+    username = _require_username(current_user)
+    with session_scope() as db:
+        u = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+        if not u:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+        # deleta somente se pertencer ao usuário
+        result = db.execute(
+            delete(MealAnalysis).where(
+                MealAnalysis.id == meal_id,
+                MealAnalysis.user_id == u.id,
+            )
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Refeição não encontrada")
+        return
 
 
-# -------- Rotas de compatibilidade --------
+# ===== Rotas de compatibilidade =====
 @router.post("/save", response_model=MealOut, status_code=status.HTTP_201_CREATED)
-def save_meal(meal: MealIn, username: str = Depends(get_current_username)):
-    """Compat: salva refeição (equivale ao POST base)"""
-    return create_meal(meal, username)  # reaproveita lógica
+def save_meal(meal: MealIn, current_user: dict = Depends(get_current_user)):
+    """Compat: salva refeição (equivale ao POST base)."""
+    return create_meal(meal, current_user)
 
 
 @router.get("/history", response_model=List[MealOut])
-def get_meal_history(username: str = Depends(get_current_username)):
-    """Compat: histórico (equivale ao GET base)"""
-    return list_meals(username)
+def get_meal_history(limit: int = 10, current_user: dict = Depends(get_current_user)):
+    """Compat: histórico (equivale ao GET base)."""
+    return list_meals(limit, current_user)
