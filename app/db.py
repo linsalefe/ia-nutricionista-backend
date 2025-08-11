@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from sqlalchemy import (
     create_engine, select, func, String, Float, Text, Boolean,
-    DateTime, ForeignKey, Enum
+    DateTime, ForeignKey, Enum, text
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -95,7 +95,8 @@ class ChatMessage(Base):
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    role: Mapped[str] = mapped_column(Enum("user", "bot", name="chat_role"), nullable=False)
+    # ✅ inclui 'assistant' no enum
+    role: Mapped[str] = mapped_column(Enum("user", "assistant", "bot", name="chat_role"), nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     type: Mapped[Optional[str]] = mapped_column(Enum("text", "image", name="message_type"))
     image_url: Mapped[Optional[str]] = mapped_column(Text)
@@ -120,6 +121,27 @@ class MealAnalysis(Base):
 Base.metadata.create_all(bind=ENGINE)
 
 
+def _ensure_pg_enums():
+    """Garante que o enum chat_role tenha o valor 'assistant' no banco."""
+    with ENGINE.begin() as conn:
+        conn.execute(text("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_type t
+                JOIN pg_enum e ON t.oid = e.enumtypid
+                WHERE t.typname = 'chat_role' AND e.enumlabel = 'assistant'
+            ) THEN
+                ALTER TYPE chat_role ADD VALUE 'assistant';
+            END IF;
+        END $$;
+        """))
+
+# aplica ajuste de enum
+_ensure_pg_enums()
+
+
 # =========================
 # API compatível com TinyDB
 # =========================
@@ -128,7 +150,7 @@ def _user_to_dict(u: User) -> Dict[str, Any]:
     return {
         "id": str(u.id),
         "username": u.username,
-        "password": u.password_hash,          # compat: alguns pontos usam 'password'
+        "password": u.password_hash,
         "password_hash": u.password_hash,
         "nome": u.nome,
         "objetivo": u.objetivo,
@@ -138,8 +160,8 @@ def _user_to_dict(u: User) -> Dict[str, Any]:
             {"weight": wl.weight, "recorded_at": wl.recorded_at.isoformat()}
             for wl in sorted(u.weight_logs, key=lambda x: x.recorded_at)
         ],
-        "refeicoes": [],                       # compat
-        "chat_history": [],                    # compat (histórico vem por função dedicada)
+        "refeicoes": [],
+        "chat_history": [],
         "has_access": u.has_access,
         "is_admin": u.is_admin,
         "avatar_url": u.avatar_url,
@@ -148,21 +170,18 @@ def _user_to_dict(u: User) -> Dict[str, Any]:
 
 
 def buscar_usuario(username: str) -> Optional[Dict[str, Any]]:
-    """Busca um usuário pelo username."""
     with session_scope() as db:
         u = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
         return _user_to_dict(u) if u else None
 
 
 def buscar_usuario_by_id(user_id: str) -> Optional[Dict[str, Any]]:
-    """Busca um usuário pelo ID."""
     with session_scope() as db:
         u = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
         return _user_to_dict(u) if u else None
 
 
 def _defaults_para_insercao(user: Dict[str, Any]) -> Dict[str, Any]:
-    """Mantém compatibilidade com o insert antigo (campos opcionais)."""
     return {
         "username": user["username"],
         "password_hash": user.get("password") or user.get("password_hash"),
@@ -177,12 +196,6 @@ def _defaults_para_insercao(user: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def salvar_usuario(user: Dict[str, Any]) -> None:
-    """
-    Upsert por username:
-    - Atualiza apenas chaves com valor não-None;
-    - Se não existir, cria com defaults;
-    - Se vier 'weight_logs', adiciona registros.
-    """
     if "username" not in user:
         raise ValueError("salvar_usuario: campo 'username' é obrigatório")
 
@@ -197,7 +210,6 @@ def salvar_usuario(user: Dict[str, Any]) -> None:
                 if v is not None:
                     setattr(u, k, v)
 
-        # opcional: inserir weight_logs enviados
         for item in user.get("weight_logs", []) or []:
             try:
                 ts = item.get("recorded_at")
@@ -205,11 +217,10 @@ def salvar_usuario(user: Dict[str, Any]) -> None:
                 wl = WeightLog(user_id=u.id, weight=float(item["weight"]), recorded_at=dt)
                 db.add(wl)
             except Exception:
-                continue  # ignora entradas malformadas
+                continue
 
 
 async def grant_user_access(user_id: str) -> None:
-    """Concede acesso ao usuário (has_access = True)."""
     with session_scope() as db:
         u = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
         if not u:
@@ -217,22 +228,18 @@ async def grant_user_access(user_id: str) -> None:
         u.has_access = True
 
 
-def salvar_chat_message(username: str, role: str, text: str, msg_type: str = "text") -> None:
-    """Salva uma mensagem de chat para o usuário."""
+def salvar_chat_message(username: str, role: str, text_: str, msg_type: str = "text") -> None:
     with session_scope() as db:
         u = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
         if not u:
             u = User(username=username)
             db.add(u)
             db.flush()
-        msg = ChatMessage(user_id=u.id, role=role, text=text, type=msg_type)
+        msg = ChatMessage(user_id=u.id, role=role, text=text_, type=msg_type)
         db.add(msg)
 
 
 def buscar_chat_history(username: str, limit: int = 10) -> List[Dict[str, Any]]:
-    """
-    Busca histórico de chat (ordem cronológica ascendente, limitado).
-    """
     with session_scope() as db:
         u = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
         if not u:
@@ -247,7 +254,6 @@ def buscar_chat_history(username: str, limit: int = 10) -> List[Dict[str, Any]]:
             .scalars()
             .all()
         )
-        # volta para ascendente como no TinyDB
         rows = list(reversed(rows))
         return [
             {
@@ -263,7 +269,6 @@ def buscar_chat_history(username: str, limit: int = 10) -> List[Dict[str, Any]]:
 
 
 def salvar_meal_analysis(username: str, analise: Dict[str, Any], imagem_nome: Optional[str] = None) -> None:
-    """Salva análise de refeição (compatível com TinyDB)."""
     with session_scope() as db:
         u = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
         if not u:
@@ -275,7 +280,6 @@ def salvar_meal_analysis(username: str, analise: Dict[str, Any], imagem_nome: Op
 
 
 def buscar_meal_history(username: str, limit: int = 10) -> List[Dict[str, Any]]:
-    """Histórico de refeições (mais recentes primeiro), formato compatível."""
     with session_scope() as db:
         u = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
         if not u:
@@ -299,4 +303,3 @@ def buscar_meal_history(username: str, limit: int = 10) -> List[Dict[str, Any]]:
             }
             for r in rows
         ]
-    
