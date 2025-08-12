@@ -3,6 +3,7 @@
 import os
 from uuid import uuid4
 from typing import Optional, Dict, Any
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from pydantic import BaseModel, Field
@@ -23,7 +24,6 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 UPLOADS_ROOT = os.path.join(BASE_DIR, "uploads")
 UPLOAD_DIR = os.path.join(UPLOADS_ROOT, "avatars")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
 
 # ============================
 # MODELS
@@ -55,6 +55,10 @@ class UserUpdateIn(BaseModel):
     initial_weight: Optional[float] = None
 
 
+class PasswordUpdateIn(BaseModel):
+    password: str = Field(..., min_length=6, description="Nova senha (mín. 6)")
+
+
 class UserOut(BaseModel):
     id: str
     username: str
@@ -64,6 +68,32 @@ class UserOut(BaseModel):
     initial_weight: Optional[float]
     has_access: bool
     avatar_url: Optional[str] = None
+
+
+# ============================
+# HELPERS
+# ============================
+
+def _public_url_to_disk_path(url_or_path: str) -> Optional[str]:
+    """
+    Converte uma URL/rota pública (/static/avatars/xxx) para o caminho no disco.
+    Retorna None se não der pra mapear.
+    """
+    if not url_or_path:
+        return None
+    path = url_or_path
+    if url_or_path.startswith("http://") or url_or_path.startswith("https://"):
+        path = urlparse(url_or_path).path  # /static/avatars/xxx.png
+
+    if "/static/" in path:
+        rel = path.split("/static/", 1)[-1]  # avatars/xxx.png
+    else:
+        rel = path.lstrip("/")
+    # Só permitimos acessar dentro de uploads
+    full = os.path.normpath(os.path.join(UPLOADS_ROOT, rel))
+    if not full.startswith(UPLOADS_ROOT):
+        return None
+    return full
 
 
 # ============================
@@ -115,13 +145,12 @@ def login(data: UserLogin):
 
 @router.get("/me", response_model=UserOut)
 def get_profile(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
-    # normaliza avatar para URL absoluta (cobre valores antigos salvos como /static/...)
+    # normaliza avatar para URL absoluta
     avatar = current_user.get("avatar_url")
     if avatar:
         if avatar.startswith("http://") or avatar.startswith("https://"):
             avatar_abs = avatar
         else:
-            # remove prefixo "/static/" se existir e gera URL absoluta via url_for
             rel = avatar.split("/static/", 1)[-1] if "/static/" in avatar else avatar.lstrip("/")
             avatar_abs = str(request.url_for("static", path=rel))
     else:
@@ -150,9 +179,17 @@ def update_profile(
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")
     current_user.update(updates)
     salvar_usuario(current_user)
-
-    # reaproveita a normalização do /me
     return get_profile(request, current_user)  # type: ignore
+
+
+@router.put("/password", status_code=204)
+def update_password(
+    data: PasswordUpdateIn,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    current_user["password"] = hash_password(data.password)
+    salvar_usuario(current_user)
+    return
 
 
 @router.post("/avatar")
@@ -161,23 +198,32 @@ def upload_avatar(
     file: UploadFile = File(...),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    # validação simples
+    # valida formato
     if file.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
         raise HTTPException(400, "Formato inválido. Use PNG/JPG/WEBP")
+
+    # apaga avatar antigo (se existir)
+    old = current_user.get("avatar_url")
+    old_path = _public_url_to_disk_path(old) if old else None
+    if old_path and os.path.isfile(old_path):
+        try:
+            os.remove(old_path)
+        except Exception:
+            pass  # não bloqueia o fluxo
 
     # nome único
     ext = os.path.splitext(file.filename or "")[1].lower() or ".png"
     fname = f"{current_user['username']}-{uuid4().hex}{ext}"
     fpath = os.path.join(UPLOAD_DIR, fname)
 
-    # salvar no disco
+    # grava no disco
     with open(fpath, "wb") as f:
         f.write(file.file.read())
 
-    # URL ABSOLUTA via /static
+    # URL pública absoluta via /static
     public_url = str(request.url_for("static", path=f"avatars/{fname}"))
 
-    # atualizar usuário
+    # persiste no usuário
     current_user["avatar_url"] = public_url
     salvar_usuario(current_user)
 
