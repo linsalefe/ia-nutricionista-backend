@@ -12,28 +12,27 @@ router = APIRouter(tags=["dashboard"])
 
 
 class LogItem(BaseModel):
-    date: str   # ISO-8601 (UTC)
+    date: str            # ISO-8601 (UTC)
     weight: float
 
 
 class DashboardMetricsOut(BaseModel):
-    objective: Optional[str]
-    height_cm: Optional[float]
-    initial_weight: Optional[float]
-    current_weight: Optional[float]
-    weight_lost: Optional[float]
-    bmi: Optional[float]
-    history: List[LogItem]
+    objective: Optional[str] = None
+    height_cm: Optional[float] = None
+    initial_weight: Optional[float] = None
+    current_weight: Optional[float] = None
+    weight_lost: Optional[float] = None
+    bmi: Optional[float] = None
+    history: List[LogItem] = []
 
 
 def _parse_iso_to_utc(ts: str) -> datetime:
-    """Aceita ISO com/sem timezone e retorna aware (UTC)."""
+    """Aceita ISO com/sem timezone e retorna datetime aware em UTC."""
     if not ts:
         return datetime.now(timezone.utc)
     try:
         dt = datetime.fromisoformat(ts)
     except Exception:
-        # trata sufixo 'Z'
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -42,13 +41,13 @@ def _parse_iso_to_utc(ts: str) -> datetime:
 
 @router.get("/metrics", response_model=DashboardMetricsOut)
 def get_dashboard_metrics(
-    period: Optional[str] = Query(None, description="Período ex.: '7d', '30d', '1y'"),
+    period: Optional[str] = Query(None, description="Período: '7d', '30d', '1y'"),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     if not current_user:
         raise HTTPException(401, "Não autenticado")
 
-    # Coleta e normaliza logs
+    # --- Normaliza e ordena logs ---
     raw_logs = current_user.get("weight_logs") or []
     parsed: List[Dict[str, Any]] = []
     for item in raw_logs:
@@ -61,34 +60,24 @@ def get_dashboard_metrics(
             parsed.append({"dt": dt, "weight": float(w)})
         except Exception:
             continue
-
-    # Ordena por data
     parsed.sort(key=lambda x: x["dt"])
 
-    # Filtro de período (UTC aware)
+    # --- Filtro por período ---
     if period:
         try:
             qty = int(period[:-1])
             unit = period[-1].lower()
             now = datetime.now(timezone.utc)
-            if unit == "d":
-                cutoff = now - timedelta(days=qty)
-            elif unit == "y":
-                cutoff = now - timedelta(days=qty * 365)
-            else:
-                cutoff = None
-            if cutoff:
-                parsed = [l for l in parsed if l["dt"] >= cutoff]
+            cutoff = now - (timedelta(days=qty) if unit == "d" else timedelta(days=qty * 365))
+            parsed = [l for l in parsed if l["dt"] >= cutoff]
         except Exception:
-            # período inválido -> ignora filtro
-            pass
+            pass  # período inválido -> não filtra
 
-    # Métricas
+    # --- Métricas ---
     height_cm: Optional[float] = current_user.get("height_cm")
     initial_weight: Optional[float] = current_user.get("initial_weight")
     current_weight: Optional[float] = parsed[-1]["weight"] if parsed else None
 
-    # Se não houver peso inicial salvo, usa o primeiro do histórico (sem mutar DB aqui)
     if initial_weight is None and parsed:
         initial_weight = parsed[0]["weight"]
 
@@ -96,9 +85,7 @@ def get_dashboard_metrics(
         if not w or not h_cm or h_cm <= 0:
             return None
         h_m = h_cm / 100.0
-        if h_m <= 0:
-            return None
-        return round(w / (h_m * h_m), 2)
+        return round(w / (h_m * h_m), 2) if h_m > 0 else None
 
     bmi = _bmi(current_weight, height_cm)
 
