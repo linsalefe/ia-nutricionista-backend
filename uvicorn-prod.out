@@ -316,3 +316,10 @@ Email enviado para testenovohostinger@gmail.com
 INFO:     127.0.0.1:46390 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
 Email enviado para ainutriflow@gmail.com
 INFO:     127.0.0.1:51886 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+Email enviado para ejamais.edu@gmail.com
+INFO:     127.0.0.1:37738 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59060 - "GET /health HTTP/1.1" 200 OK
+INFO:     34.192.147.6:0 - "GET /health HTTP/1.0" 200 OK
+INFO:     34.192.147.6:0 - "GET /health HTTP/1.0" 200 OK
+Email enviado para gestarclick@gmail.com
+INFO:     34.192.147.6:0 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
