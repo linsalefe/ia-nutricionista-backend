@@ -77,3 +77,7 @@ app.include_router(meal_router,         prefix="/api/meal",         tags=["meal"
 app.include_router(meal_router,         prefix="/api/meals",        tags=["meal-compat"])
 
 app.include_router(webhook_router,      prefix="/api/webhook",      tags=["webhook"])
+
+# --- webhook Kiwify ---
+from app.endpoints.webhook_kiwify import router as webhook_router
+app.include_router(webhook_router, prefix="/api/webhook", tags=["webhook"])
