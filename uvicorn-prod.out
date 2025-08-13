@@ -108,3 +108,29 @@ INFO:     Started server process [17227]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+✅ OpenAI API Key encontrada: sk-proj-TV...
+INFO:     34.95.163.104:0 - "POST /api/webhook/kiwify?signature=9a9a9487156238c951b060da5fd3b4462461d17c HTTP/1.1" 200 OK
+INFO:     34.95.238.190:0 - "POST /api/webhook/kiwify?signature=eb6ed485bf97d7a6d4424927f9a45c8dd4c8952e HTTP/1.1" 200 OK
+INFO:     34.95.238.190:0 - "POST /api/webhook/kiwify?signature=3b752d407f716ef3e818708ed14ebaaa37cc19b3 HTTP/1.1" 200 OK
+nohup: ignoring input
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [17227]
+INFO:     Started server process [17669]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+nohup: ignoring input
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [17669]
+INFO:     Started server process [17687]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+✅ OpenAI API Key encontrada: sk-proj-TV...
+INFO:     127.0.0.1:60724 - "POST /api/webhook/kiwify?signature=08a99cff48c87ed082d33b1e172902f9f63e8caa HTTP/1.1" 200 OK
+INFO:     34.192.147.6:0 - "POST /api/webhook/kiwify?signature=08a99cff48c87ed082d33b1e172902f9f63e8caa HTTP/1.1" 200 OK
+INFO:     34.192.147.6:0 - "POST /api/webhook/kiwify?signature=WRONG HTTP/1.1" 401 Unauthorized
