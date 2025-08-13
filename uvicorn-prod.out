@@ -8,3 +8,13 @@ INFO:     127.0.0.1:50542 - "GET /openapi.json HTTP/1.1" 200 OK
 INFO:     127.0.0.1:57538 - "GET /health HTTP/1.1" 200 OK
 INFO:     34.192.147.6:0 - "POST /api/webhook/kiwify HTTP/1.0" 200 OK
 INFO:     83.222.191.218:0 - "GET / HTTP/1.0" 200 OK
+INFO:     216.218.206.69:0 - "GET / HTTP/1.0" 200 OK
+INFO:     20.83.167.28:0 - "GET /developmentserver/metadatauploader HTTP/1.0" 404 Not Found
+INFO:     216.218.206.69:0 - "GET /webui/ HTTP/1.0" 404 Not Found
+INFO:     13.218.108.106:0 - "GET / HTTP/1.0" 200 OK
+INFO:     13.218.108.106:0 - "GET /favicon.ico HTTP/1.0" 404 Not Found
+INFO:     13.218.108.106:0 - "GET /favicon.png HTTP/1.0" 404 Not Found
+INFO:     216.218.206.69:0 - "GET /favicon.ico HTTP/1.0" 404 Not Found
+INFO:     216.218.206.69:0 - "GET / HTTP/1.0" 200 OK
+INFO:     34.95.163.104:0 - "POST /api/webhook/kiwify?signature=23fdfb225e367b9d6421e282bef85fcadc6a6469 HTTP/1.0" 200 OK
+INFO:     34.95.238.190:0 - "POST /api/webhook/kiwify?signature=88dda3d06e7e0322f68758e9f893074f5270450b HTTP/1.0" 200 OK
