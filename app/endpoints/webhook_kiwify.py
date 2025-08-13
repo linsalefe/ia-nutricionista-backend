@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Request
 import os
 from typing import Optional, Tuple
+from datetime import datetime
+import uuid
 
 from app.services.email import send_access_email
-
 from sqlalchemy import create_engine, MetaData, Table, update, select, insert
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -31,14 +32,9 @@ def _get_email_and_name(payload: dict) -> Tuple[Optional[str], Optional[str]]:
     return (email or None, name or None)
 
 def _find_user(conn, email: str):
+    # tabela não tem coluna email; procura por username=email
     row = conn.execute(select(users).where(users.c.username == email)).fetchone()
-    if row:
-        return row._mapping
-    if "email" in users.c:
-        row = conn.execute(select(users).where(users.c.email == email)).fetchone()
-        if row:
-            return row._mapping
-    return None
+    return row._mapping if row else None
 
 def _ensure_access(email: str, name: Optional[str]) -> int:
     with engine.begin() as conn:
@@ -50,13 +46,19 @@ def _ensure_access(email: str, name: Optional[str]) -> int:
                     .where(users.c.id == row["id"])
                     .values(has_access=True)
                 )
-            return 1
+            return 1  # já tinha ou acabou de ganhar acesso
 
-        values = {"username": email, "has_access": True}
-        if "email" in users.c:
-            values["email"] = email
-        if name and "name" in users.c:
-            values["name"] = name
+        # não existe -> inserir com campos NOT NULL exigidos
+        values = {
+            "id": uuid.uuid4(),
+            "username": email,
+            "has_access": True,
+            "is_admin": False,
+            "created_at": datetime.utcnow(),
+        }
+        if name and "nome" in users.c:
+            values["nome"] = name
+
         try:
             conn.execute(insert(users).values(values))
             return 1
