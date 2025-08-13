@@ -285,3 +285,34 @@ Configuracoes de email nao encontradas
 INFO:     127.0.0.1:33010 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
 Configuracoes de email nao encontradas
 INFO:     127.0.0.1:36008 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+nohup: ignoring input
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18492]
+INFO:     Started server process [18604]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+✅ OpenAI API Key encontrada: sk-proj-TV...
+INFO:     127.0.0.1:57134 - "GET /health HTTP/1.1" 200 OK
+Email enviado para alefelins01@gmail.com
+INFO:     127.0.0.1:43828 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+Email enviado para alefelinseng@gmail.com
+INFO:     127.0.0.1:51500 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+nohup: ignoring input
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18604]
+INFO:     Started server process [18653]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+✅ OpenAI API Key encontrada: sk-proj-TV...
+Email enviado para alefelins01@gmail.com
+INFO:     127.0.0.1:60186 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+Email enviado para testenovohostinger@gmail.com
+INFO:     127.0.0.1:46390 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+Email enviado para ainutriflow@gmail.com
+INFO:     127.0.0.1:51886 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
