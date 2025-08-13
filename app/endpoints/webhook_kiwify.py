@@ -96,43 +96,43 @@ def send_welcome_email(email: str, name: Optional[str], temp_password: Optional[
     try:
         if temp_password:
             # Novo usu√°rio - envia dados de login
-            subject = "Ì†ºÌ Bem-vindo ao NutriFlow! Seus dados de acesso"
+            subject = "Bem-vindo ao NutriFlow! Seus dados de acesso"
             body = f"""
-Olæâ {name or 'Cliente'}!
+Ola {name or 'Cliente'}!
 
-Sua compra foi aprovada com sucesso! √°Ì†ºÌ
+Sua compra foi aprovada com sucesso!
 
-Aqui estæâo seus dados de acesso ao NutriFlow:
+Aqui estao seus dados de acesso ao NutriFlow:
 
-√£Ì†ΩÌ Email: {email}
-≥ßÌ†ΩÌ Senha tempor¥ëria: {temp_password}
+Email: {email}
+Senha temporaria: {temp_password}
 
-√°Ì†ΩÌ Acesse agora: https://app-nutriflow.onrender.com/login
+Acesse agora: https://app-nutriflow.onrender.com/login
 
-¥ó‚ö†Ô∏è IMPORTANTE: Por seguran√ßa, altere sua senha no primeiro acesso em Configura√ß√µes.
+IMPORTANTE: Por seguranca, altere sua senha no primeiro acesso em Configuracoes.
 
-Seja bem-vindo √† fam√≠lia NutriFlow! Ì†ΩÌ
+Seja bem-vindo a familia NutriFlow!
 
 ---
 Equipe NutriFlow
             """
         else:
-            # Usu≤örio existente - s√°√≥ libera acesso
-            subject = "‚úÖ Acesso liberado no NutriFlow!"
+            # Usu√°rio existente - s√≥ libera acesso
+            subject = "Acesso liberado no NutriFlow!"
             body = f"""
-Ol√° {name or 'Cliente'}!
+Ola {name or 'Cliente'}!
 
-Sua compra foi aprovada e seu acesso ao NutriFlow foi liberado! Ì†ºÌ
+Sua compra foi aprovada e seu acesso ao NutriFlow foi liberado!
 
-æâÌ†ΩÌ Acesse com seu login habitual: https://app-nutriflow.onrender.com/login
+Acesse com seu login habitual: https://app-nutriflow.onrender.com/login
 
-Aproveite todos os recursos da plataforma! ¥óÌ†ΩÌ
+Aproveite todos os recursos da plataforma!
 
 ---
 Equipe NutriFlow
             """
         
-        # Usar fun≤ö√ß√£o send_access_email
+        # Usar fun√ß√£o send_access_email
         send_access_email(to=email, name=name, subject=subject, body=body)
         
     except Exception as e:
