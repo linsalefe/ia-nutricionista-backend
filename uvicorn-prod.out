@@ -69,3 +69,42 @@ Traceback (most recent call last):
 json.decoder.JSONDecodeError: Extra data: line 1 column 73 (char 72)
 INFO:     127.0.0.1:56332 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
 INFO:     127.0.0.1:41148 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+nohup: ignoring input
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [16904]
+INFO:     Started server process [17010]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+/home/ubuntu/ia-nutricionista-backend/app/endpoints/webhook_kiwify.py:61: SAWarning: Column 'users.id' is marked as a member of the primary key for table 'users', but has no Python-side or server-side default generator indicated, nor does it indicate 'autoincrement=True' or 'nullable=True', and no explicit value is passed.  Primary key columns typically may not store NULL.
+  conn.execute(insert(users).values(values))
+✅ OpenAI API Key encontrada: sk-proj-TV...
+INFO:     127.0.0.1:34322 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+nohup: ignoring input
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [17010]
+INFO:     Started server process [17061]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+✅ OpenAI API Key encontrada: sk-proj-TV...
+INFO:     127.0.0.1:41802 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41806 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+INFO:     43.157.43.147:0 - "GET / HTTP/1.0" 200 OK
+INFO:     43.157.43.147:0 - "GET / HTTP/1.0" 200 OK
+INFO:     127.0.0.1:0 - "GET /health HTTP/1.0" 200 OK
+INFO:     34.192.147.6:0 - "GET /health HTTP/1.0" 200 OK
+INFO:     34.192.147.6:0 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [17061]
+nohup: ignoring input
+INFO:     Started server process [17227]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
