@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
-import os, hmac, hashlib, json
+import os
 from typing import Optional, Tuple
 from datetime import datetime
 import uuid
+import secrets
+import string
 
 from app.services.email import send_access_email
 from sqlalchemy import create_engine, MetaData, Table, update, select, insert
@@ -32,58 +33,129 @@ def _get_email_and_name(payload: dict) -> Tuple[Optional[str], Optional[str]]:
     name = (buyer.get("name") or payload.get("name") or "").strip()
     return (email or None, name or None)
 
+def _generate_temp_password(length: int = 8) -> str:
+    """Gera uma senha tempor√°ria segura"""
+    chars = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(chars) for _ in range(length))
+
+def _hash_password(password: str) -> str:
+    """Hash da senha usando bcrypt"""
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    return pwd_context.hash(password)
+
 def _find_user(conn, email: str):
+    """Procura usu√°rio por username=email"""
     row = conn.execute(select(users).where(users.c.username == email)).fetchone()
     return row._mapping if row else None
 
-def _ensure_access(email: str, name: Optional[str]) -> int:
+def _ensure_access_with_password(email: str, name: Optional[str]) -> Tuple[int, Optional[str]]:
+    """
+    Garante acesso ao usu√°rio e retorna (updated, senha_temporaria)
+    Se usu√°rio n√£o existe, cria com senha tempor√°ria
+    Se existe mas n√£o tem acesso, libera acesso mas n√£o altera senha
+    """
     with engine.begin() as conn:
         row = _find_user(conn, email)
+        
         if row:
+            # Usu√°rio existe
             if not row.get("has_access", False):
-                conn.execute(update(users).where(users.c.id == row["id"]).values(has_access=True))
-            return 1
+                # Libera acesso mas mant√©m senha existente
+                conn.execute(
+                    update(users)
+                    .where(users.c.id == row["id"])
+                    .values(has_access=True)
+                )
+                return (1, None)  # Sem nova senha
+            return (1, None)  # J√° tinha acesso
+        
+        # Usu√°rio n√£o existe -> criar com senha tempor√°ria
+        temp_password = _generate_temp_password()
+        hashed_password = _hash_password(temp_password)
+        
         values = {
             "id": uuid.uuid4(),
             "username": email,
+            "password_hash": hashed_password,
             "has_access": True,
             "is_admin": False,
             "created_at": datetime.utcnow(),
         }
         if name and "nome" in users.c:
             values["nome"] = name
+        
         try:
             conn.execute(insert(users).values(values))
-            return 1
+            return (1, temp_password)  # Nova senha gerada
         except Exception:
-            return 0
+            return (0, None)
 
-def _verify_signature(raw_body: bytes, got_sig: str | None) -> bool:
-    token = os.getenv("KIWIFY_WEBHOOK_TOKEN") or ""
-    if not token:
-        return True  # sem token configurado, n√£o bloqueia
-    if not got_sig:
-        return False
-    expected = hmac.new(token.encode(), raw_body, hashlib.sha1).hexdigest()
-    return hmac.compare_digest(got_sig, expected)
+def send_welcome_email(email: str, name: Optional[str], temp_password: Optional[str]):
+    """Envia email de boas-vindas com dados de acesso"""
+    try:
+        if temp_password:
+            # Novo usu√°rio - envia dados de login
+            subject = "Ì†ºÌ Bem-vindo ao NutriFlow! Seus dados de acesso"
+            body = f"""
+Olæâ {name or 'Cliente'}!
+
+Sua compra foi aprovada com sucesso! √°Ì†ºÌ
+
+Aqui estæâo seus dados de acesso ao NutriFlow:
+
+√£Ì†ΩÌ Email: {email}
+≥ßÌ†ΩÌ Senha tempor¥ëria: {temp_password}
+
+√°Ì†ΩÌ Acesse agora: https://app-nutriflow.onrender.com/login
+
+¥ó‚ö†Ô∏è IMPORTANTE: Por seguran√ßa, altere sua senha no primeiro acesso em Configura√ß√µes.
+
+Seja bem-vindo √† fam√≠lia NutriFlow! Ì†ΩÌ
+
+---
+Equipe NutriFlow
+            """
+        else:
+            # Usu≤örio existente - s√°√≥ libera acesso
+            subject = "‚úÖ Acesso liberado no NutriFlow!"
+            body = f"""
+Ol√° {name or 'Cliente'}!
+
+Sua compra foi aprovada e seu acesso ao NutriFlow foi liberado! Ì†ºÌ
+
+æâÌ†ΩÌ Acesse com seu login habitual: https://app-nutriflow.onrender.com/login
+
+Aproveite todos os recursos da plataforma! ¥óÌ†ΩÌ
+
+---
+Equipe NutriFlow
+            """
+        
+        # Usar fun≤ö√ß√£o send_access_email
+        send_access_email(to=email, name=name, subject=subject, body=body)
+        
+    except Exception as e:
+        print(f"Erro ao enviar email: {e}")
 
 @router.post("/kiwify")
 async def kiwify_webhook(request: Request):
-    raw = await request.body()
-    sig = request.query_params.get("signature") or request.headers.get("X-Signature")
-    if not _verify_signature(raw, sig):
-        return JSONResponse({"ok": False, "error": "invalid_signature"}, status_code=401)
-
-    payload = json.loads(raw or b"{}")
+    payload = await request.json()
     email, name = _get_email_and_name(payload)
+
     if not email:
         return {"ok": True, "skipped": "no_email"}
+
     if not _is_approved(payload):
         return {"ok": True, "skipped": "not_approved"}
 
-    updated = _ensure_access(email, name)
-    try:
-        send_access_email(to=email, name=name)
-    except Exception:
-        pass
-    return {"ok": True, "updated": int(updated)}
+    updated, temp_password = _ensure_access_with_password(email, name)
+    
+    # Envia email personalizado baseado se √© novo usu√°rio ou n√£o
+    send_welcome_email(email, name, temp_password)
+
+    return {
+        "ok": True, 
+        "updated": int(updated),
+        "new_user": temp_password is not None
+    }

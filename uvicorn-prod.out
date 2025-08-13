@@ -134,3 +134,51 @@ INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 INFO:     127.0.0.1:60724 - "POST /api/webhook/kiwify?signature=08a99cff48c87ed082d33b1e172902f9f63e8caa HTTP/1.1" 200 OK
 INFO:     34.192.147.6:0 - "POST /api/webhook/kiwify?signature=08a99cff48c87ed082d33b1e172902f9f63e8caa HTTP/1.1" 200 OK
 INFO:     34.192.147.6:0 - "POST /api/webhook/kiwify?signature=WRONG HTTP/1.1" 401 Unauthorized
+nohup: ignoring input
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [17687]
+✅ OpenAI API Key encontrada: sk-proj-TV...
+Traceback (most recent call last):
+  File "/home/ubuntu/ia-nutricionista-backend/venv/bin/uvicorn", line 8, in <module>
+    sys.exit(main())
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/click/core.py", line 1442, in __call__
+    return self.main(*args, **kwargs)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/click/core.py", line 1363, in main
+    rv = self.invoke(ctx)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/click/core.py", line 1226, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/click/core.py", line 794, in invoke
+    return callback(*args, **kwargs)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/uvicorn/main.py", line 413, in main
+    run(
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/uvicorn/main.py", line 580, in run
+    server.run()
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/uvicorn/server.py", line 67, in run
+    return asyncio.run(self.serve(sockets=sockets))
+  File "/usr/lib/python3.10/asyncio/runners.py", line 44, in run
+    return loop.run_until_complete(main)
+  File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/uvicorn/server.py", line 71, in serve
+    await self._serve(sockets)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/uvicorn/server.py", line 78, in _serve
+    config.load()
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/uvicorn/config.py", line 436, in load
+    self.loaded_app = import_from_string(self.app)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/uvicorn/importer.py", line 19, in import_from_string
+    module = importlib.import_module(module_str)
+  File "/usr/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/home/ubuntu/ia-nutricionista-backend/app/main.py", line 82, in <module>
+    from app.endpoints.webhook_kiwify import router as webhook_router
+  File "/home/ubuntu/ia-nutricionista-backend/app/endpoints/webhook_kiwify.py", line 99
+    subject = "���� Bem-vindo ao NutriFlow! Seus dados de acesso"
+                                                                 ^
+SyntaxError: (unicode error) 'utf-8' codec can't decode byte 0xed in position 0: invalid continuation byte
