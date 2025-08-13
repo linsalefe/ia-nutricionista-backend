@@ -1,28 +1,84 @@
 from fastapi import APIRouter, Request
+import os
+from typing import Optional, Tuple
+
 from app.services.email import send_access_email
+
+from sqlalchemy import create_engine, MetaData, Table, update, select, insert
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+metadata = MetaData()
+users = Table("users", metadata, autoload_with=engine)
 
 router = APIRouter(tags=["webhook"])
 
-@router.post("/kiwify")
-async def kiwify_webhook(request: Request):
-    payload = await request.json()
-    buyer = payload.get("buyer") or {}
-    email = (buyer.get("email") or payload.get("email") or "").strip()
-    name = (buyer.get("name") or payload.get("name") or "").strip()
-
-    status_text = " ".join([
+def _is_approved(payload: dict) -> bool:
+    txt = " ".join([
         str(payload.get("status", "")),
         str(payload.get("payment_status", "")),
         str(payload.get("event", "")),
     ]).lower()
+    return any(w in txt for w in [
+        "approved", "aprovada", "paid", "pago", "completed",
+        "concluida", "concluída", "succeeded", "captured"
+    ])
 
-    approved = any(w in status_text for w in ["approved","aprovada","paid","pago","completed","concluida","concluída","succeeded","captured"])
+def _get_email_and_name(payload: dict) -> Tuple[Optional[str], Optional[str]]:
+    buyer = payload.get("buyer") or {}
+    email = (buyer.get("email") or payload.get("email") or "").strip().lower()
+    name = (buyer.get("name") or payload.get("name") or "").strip()
+    return (email or None, name or None)
+
+def _find_user(conn, email: str):
+    row = conn.execute(select(users).where(users.c.username == email)).fetchone()
+    if row:
+        return row._mapping
+    if "email" in users.c:
+        row = conn.execute(select(users).where(users.c.email == email)).fetchone()
+        if row:
+            return row._mapping
+    return None
+
+def _ensure_access(email: str, name: Optional[str]) -> int:
+    with engine.begin() as conn:
+        row = _find_user(conn, email)
+        if row:
+            if not row.get("has_access", False):
+                conn.execute(
+                    update(users)
+                    .where(users.c.id == row["id"])
+                    .values(has_access=True)
+                )
+            return 1
+
+        values = {"username": email, "has_access": True}
+        if "email" in users.c:
+            values["email"] = email
+        if name and "name" in users.c:
+            values["name"] = name
+        try:
+            conn.execute(insert(users).values(values))
+            return 1
+        except Exception:
+            return 0
+
+@router.post("/kiwify")
+async def kiwify_webhook(request: Request):
+    payload = await request.json()
+    email, name = _get_email_and_name(payload)
 
     if not email:
         return {"ok": True, "skipped": "no_email"}
 
-    if not approved:
+    if not _is_approved(payload):
         return {"ok": True, "skipped": "not_approved"}
 
-    send_access_email(to=email, name=name or None)
-    return {"ok": True}
+    updated = _ensure_access(email, name)
+
+    try:
+        send_access_email(to=email, name=name)
+    except Exception:
+        pass
+
+    return {"ok": True, "updated": int(updated)}

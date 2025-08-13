@@ -1,20 +1,71 @@
 nohup: ignoring input
-INFO:     Started server process [14145]
+INFO:     Started server process [16868]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [16868]
+plication shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [16839]
+nohup: ignoring input
+INFO:     Started server process [16904]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 ✅ OpenAI API Key encontrada: sk-proj-TV...
-INFO:     127.0.0.1:50542 - "GET /openapi.json HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57538 - "GET /health HTTP/1.1" 200 OK
-INFO:     34.192.147.6:0 - "POST /api/webhook/kiwify HTTP/1.0" 200 OK
-INFO:     83.222.191.218:0 - "GET / HTTP/1.0" 200 OK
-INFO:     216.218.206.69:0 - "GET / HTTP/1.0" 200 OK
-INFO:     20.83.167.28:0 - "GET /developmentserver/metadatauploader HTTP/1.0" 404 Not Found
-INFO:     216.218.206.69:0 - "GET /webui/ HTTP/1.0" 404 Not Found
-INFO:     13.218.108.106:0 - "GET / HTTP/1.0" 200 OK
-INFO:     13.218.108.106:0 - "GET /favicon.ico HTTP/1.0" 404 Not Found
-INFO:     13.218.108.106:0 - "GET /favicon.png HTTP/1.0" 404 Not Found
-INFO:     216.218.206.69:0 - "GET /favicon.ico HTTP/1.0" 404 Not Found
-INFO:     216.218.206.69:0 - "GET / HTTP/1.0" 200 OK
-INFO:     34.95.163.104:0 - "POST /api/webhook/kiwify?signature=23fdfb225e367b9d6421e282bef85fcadc6a6469 HTTP/1.0" 200 OK
-INFO:     34.95.238.190:0 - "POST /api/webhook/kiwify?signature=88dda3d06e7e0322f68758e9f893074f5270450b HTTP/1.0" 200 OK
+INFO:     127.0.0.1:54842 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51494 - "POST /api/webhook/kiwify HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/uvicorn/protocols/http/httptools_impl.py", line 409, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/fastapi/applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/routing.py", line 78, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/routing.py", line 75, in app
+    response = await f(request)
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/fastapi/routing.py", line 302, in app
+    raw_response = await run_endpoint_function(
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/fastapi/routing.py", line 213, in run_endpoint_function
+    return await dependant.call(**values)
+  File "/home/ubuntu/ia-nutricionista-backend/app/endpoints/webhook_kiwify.py", line 46, in kiwify_webhook
+    payload = await request.json()
+  File "/home/ubuntu/ia-nutricionista-backend/venv/lib/python3.10/site-packages/starlette/requests.py", line 250, in json
+    self._json = json.loads(body)
+  File "/usr/lib/python3.10/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "/usr/lib/python3.10/json/decoder.py", line 340, in decode
+    raise JSONDecodeError("Extra data", s, end)
+json.decoder.JSONDecodeError: Extra data: line 1 column 73 (char 72)
+INFO:     127.0.0.1:56332 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41148 - "POST /api/webhook/kiwify HTTP/1.1" 200 OK
