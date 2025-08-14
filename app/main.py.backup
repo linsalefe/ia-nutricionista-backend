@@ -31,7 +31,6 @@ app = FastAPI(title="IA Nutricionista SaaS", version="0.1.0")
 # -------- CORS --------
 ALLOWED_ORIGINS = [
     os.getenv("FRONTEND_URL", "https://app-nutriflow.onrender.com"),
-    "https://nutriflow-api.duckdns.org",
     "http://localhost:5173",
     "http://localhost:4173",
     "http://127.0.0.1:5173",
