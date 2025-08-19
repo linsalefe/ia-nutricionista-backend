@@ -77,7 +77,7 @@ def send_to_ai(
             )
         
         # Buscar histórico de chat do usuário (últimas 10 mensagens)
-        history = buscar_chat_history(username, limit=10)
+        history = buscar_chat_history(username, limit=3)
         print(f"🔍 DEBUG - Histórico encontrado: {len(history)} mensagens")
         
         # Gerar prompt personalizado da Lina
