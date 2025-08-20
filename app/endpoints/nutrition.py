@@ -4,9 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Literal, Dict, Any, Tuple
 from app.auth import get_current_username
 import os
-import math
 
-# Prefer psycopg2 (psycopg2-binary) para compatibilidade
 try:
     import psycopg2
     import psycopg2.extras
@@ -22,7 +20,8 @@ SexType = Literal["M", "F"]
 ALLOWED_ACTIVITY = {1.2, 1.375, 1.55, 1.725, 1.9}
 
 class NutritionProfileOut(BaseModel):
-    sex: SexType
+    # 🔧 Agora opcional para não quebrar GET /profile quando vazio no banco
+    sex: Optional[SexType] = None
     age: int
     height_cm: float
     current_weight: float
@@ -50,7 +49,6 @@ class TargetsOut(BaseModel):
     warnings: List[str]
     blocked: bool
 
-
 # --------- DB HELPERS ---------
 def _dsn_from_env() -> dict:
     url = os.getenv("DATABASE_URL")
@@ -70,12 +68,20 @@ def _get_conn():
         return psycopg2.connect(cfg["dsn"], sslmode=os.getenv("PGSSLMODE","prefer"))
     return psycopg2.connect(**cfg)
 
+def _map_objetivo_to_goal_type(obj: Optional[str]) -> GoalType:
+    s = (obj or "").strip().lower()
+    if any(k in s for k in ["perder", "emagrec", "déficit", "deficit", "cut"]):
+        return "lose"
+    if any(k in s for k in ["ganhar", "massa", "hipertrof", "bulking"]):
+        return "gain"
+    return "maintain"
+
 def _fetch_profile(username: str) -> NutritionProfileOut:
     with _get_conn() as conn, conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
             """
             SELECT sex, age, height_cm, current_weight, activity_level, goal_type,
-                   pace_kg_per_week, restrictions, confirm_low_calorie
+                   pace_kg_per_week, restrictions, confirm_low_calorie, objetivo
             FROM public.users
             WHERE username = %s
             """,
@@ -84,18 +90,33 @@ def _fetch_profile(username: str) -> NutritionProfileOut:
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-        # Normalizações
-        sex = (row["sex"] or "").upper()
-        restrictions = row["restrictions"] or []
+
+        # Normalizações e defaults seguros
+        sex_raw = row["sex"]
+        sex_norm: Optional[SexType] = None
+        if isinstance(sex_raw, str) and sex_raw.strip():
+            up = sex_raw.strip().upper()
+            if up in ("M", "F"):
+                sex_norm = up  # type: ignore[assignment]
+
+        restrictions_db = row.get("restrictions")
+        if isinstance(restrictions_db, list):
+            restrictions = [str(x) for x in restrictions_db]
+        else:
+            restrictions = []
+
+        # Se goal_type estiver vazio, inferimos a partir de 'objetivo' legível
+        goal_type = row.get("goal_type") or _map_objetivo_to_goal_type(row.get("objetivo"))
+
         profile = NutritionProfileOut(
-            sex=sex,
+            sex=sex_norm,  # pode ser None aqui
             age=int(row["age"]) if row["age"] is not None else 0,
             height_cm=float(row["height_cm"]) if row["height_cm"] is not None else 0.0,
             current_weight=float(row["current_weight"]) if row["current_weight"] is not None else 0.0,
             activity_level=float(row["activity_level"]) if row["activity_level"] is not None else 1.2,
-            goal_type=row["goal_type"] or "maintain",
+            goal_type=goal_type,  # garantido por _map_objetivo_to_goal_type
             pace_kg_per_week=float(row["pace_kg_per_week"]) if row["pace_kg_per_week"] is not None else None,
-            restrictions=[str(x) for x in restrictions],
+            restrictions=restrictions,
             confirm_low_calorie=bool(row["confirm_low_calorie"]),
         )
         return profile
@@ -168,38 +189,33 @@ def _round5(x: float) -> float:
     return float(int(round(x / 5.0)) * 5)
 
 def _bmr_mifflin(sex: SexType, age: int, height_cm: float, weight_kg: float) -> float:
-    # Mifflin-St Jeor
     if sex == "M":
         return 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
     else:
         return 10 * weight_kg + 6.25 * height_cm - 5 * age - 161
 
 def _adjusted_weight_if_obese(current_weight: float, height_cm: float) -> float:
-    # IMC >= 30 => peso ajustado: IBW + 0.25*(peso atual - IBW), onde IBW = 25 * h^2
     h = max(height_cm, 1.0) / 100.0
     ibw = 25.0 * (h ** 2)
     if ibw <= 0:
         return current_weight
-    bmi = current_weight / (h ** 2)
+    bmi = current_weight / (h ** 2) if h > 0 else 0
     if bmi >= 30.0:
         return ibw + 0.25 * (current_weight - ibw)
     return current_weight
 
 def _compute_targets(profile: NutritionProfileOut) -> Tuple[TargetsOut, Dict[str, Any]]:
-    # BMR/TDEE
-    bmr = _bmr_mifflin(profile.sex, profile.age, profile.height_cm, profile.current_weight)
+    bmr = _bmr_mifflin(profile.sex or "M", profile.age, profile.height_cm, profile.current_weight)  # sex garantido no /targets
     tdee = bmr * float(profile.activity_level)
 
-    # Meta calórica
     if profile.goal_type == "lose":
-        kcal = tdee * 0.85  # -15% padrão (faixa 10–20)
+        kcal = tdee * 0.85
     elif profile.goal_type == "gain":
-        kcal = tdee * 1.10  # +10% (faixa 5–15)
+        kcal = tdee * 1.10
     else:
         kcal = tdee
 
-    # Salvaguarda kcal mínima por sexo
-    min_kcal = 1200.0 if profile.sex == "F" else 1400.0
+    min_kcal = 1200.0 if (profile.sex == "F") else 1400.0
     warnings: List[str] = []
     blocked = False
 
@@ -207,18 +223,14 @@ def _compute_targets(profile: NutritionProfileOut) -> Tuple[TargetsOut, Dict[str
         if not profile.confirm_low_calorie:
             warnings.append(f"Kcal calculada ({int(kcal)} kcal) abaixo do mínimo seguro ({int(min_kcal)} kcal). Necessária confirmação explícita.")
             blocked = True
-            kcal = min_kcal  # aplica piso para exibir metas seguras
+            kcal = min_kcal
         else:
             warnings.append(f"Kcal abaixo do mínimo ({int(min_kcal)} kcal) mas liberada por confirmação explícita.")
 
-    # Proteína 1.8 g/kg (usar peso ajustado se IMC ≥ 30)
     protein_weight = _adjusted_weight_if_obese(profile.current_weight, profile.height_cm)
     protein_g = 1.8 * protein_weight
-
-    # Gordura 0.8 g/kg (peso atual)
     fat_g = 0.8 * profile.current_weight
 
-    # Carbo = calorias restantes / 4
     p_cal = protein_g * 4.0
     f_cal = fat_g * 9.0
     remaining = kcal - (p_cal + f_cal)
@@ -247,24 +259,16 @@ def _compute_targets(profile: NutritionProfileOut) -> Tuple[TargetsOut, Dict[str
     }
     return out, debug
 
-
 # --------- ROUTES ---------
 @router.get("/profile", response_model=NutritionProfileOut)
 def get_profile(username: str = Depends(get_current_username)):
-    profile = _fetch_profile(username)
-    # sanity checks básicos
-    if profile.age <= 0 or profile.height_cm <= 0 or profile.current_weight <= 0:
-        # ainda permitimos leitura mesmo incompleta, para o front pedir dados
-        pass
-    return profile
+    return _fetch_profile(username)
 
 @router.put("/profile", response_model=NutritionProfileOut)
 def put_profile(payload: NutritionProfileUpdate, username: str = Depends(get_current_username)):
-    _validate_update(payload)
-    # normalizar sex se vier minúsculo
     if payload.sex is not None:
         payload.sex = payload.sex.upper()  # type: ignore
-
+    _validate_update(payload)
     _do_update(username, payload)
     return _fetch_profile(username)
 
@@ -272,7 +276,6 @@ def put_profile(payload: NutritionProfileUpdate, username: str = Depends(get_cur
 def get_targets(username: str = Depends(get_current_username)):
     profile = _fetch_profile(username)
 
-    # Validação mínima para cálculo
     if not profile.sex or profile.sex not in ("M","F"):
         raise HTTPException(400, detail="Defina 'sex' como 'M' ou 'F' no perfil.")
     if profile.age <= 0 or profile.height_cm <= 0 or profile.current_weight <= 0:
