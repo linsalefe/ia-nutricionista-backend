@@ -1,6 +1,7 @@
 # app/endpoints/chat.py
 import os
 import re
+import json
 from datetime import datetime
 import openai
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -102,12 +103,6 @@ _KEY_MAP = {
 }
 
 def _parse_perfil_cmd(text: str) -> dict:
-    """
-    Aceita formatos:
-      /perfil sex=M age=30 height=180 weight=92 activity=1.55 goal=gain pace=0.5
-      /perfil sexo=M idade=30 altura=180 peso=92 atividade=1.55 objetivo=ganhar
-      /perfil restrictions=lactose,gluten confirm_low_calorie=true
-    """
     body = text.strip().split(None, 1)
     if len(body) < 2:
         return {}
@@ -127,7 +122,6 @@ def _parse_perfil_cmd(text: str) -> dict:
             try: out[key] = float(v)
             except: pass
         elif key == "restrictions":
-            # vírgula separada
             out[key] = [s.strip() for s in v.split(",") if s.strip()]
         elif key == "confirm_low_calorie":
             out[key] = v.lower() in ("1","true","t","yes","sim","y")
@@ -164,7 +158,7 @@ def _validate_profile_patch(p: dict):
         raise HTTPException(422, "goal_type deve ser 'lose', 'maintain' ou 'gain'.")
 
 def _patch_profile(username: str, p: dict):
-    if not p: 
+    if not p:
         return
     fields, vals = [], []
     for k in ("sex","age","height_cm","current_weight","activity_level","goal_type","pace_kg_per_week","restrictions","confirm_low_calorie"):
@@ -181,12 +175,129 @@ def _patch_profile(username: str, p: dict):
     with _get_conn() as conn, conn.cursor() as cur:
         cur.execute(sql, vals)
 
+# ---------- /refeicao (texto) ----------
+_MEAL_JSON_INSTRUCTIONS = """Responda APENAS com um JSON válido, sem explicações.
+Formato:
+{
+  "items": [{"nome": "string", "quantidade": "string"}],
+  "totais": {"kcal": number, "protein_g": number, "carbs_g": number, "fat_g": number},
+  "dica": "string curta"
+}
+Regras:
+- Use estimativas conservadoras.
+- Proteína/gordura/carboidrato em gramas; kcal em calorias.
+- Se descrição for vaga, suponha porções comuns.
+"""
+
+def _analyze_meal_text(description: str) -> dict:
+    """Chama OpenAI para extrair JSON de macros de uma refeição em texto."""
+    resp = client.chat.completions.create(
+        model=os.getenv("CHAT_MODEL_ANALYZE", "gpt-4o-mini"),
+        messages=[
+            {"role": "system", "content": "Você é uma nutricionista que extrai macros de refeições em texto."},
+            {"role": "user", "content": f"{_MEAL_JSON_INSTRUCTIONS}\nDescrição: {description}"},
+        ],
+        max_tokens=400,
+        temperature=0.2,
+    )
+    raw = (resp.choices[0].message.content or "").strip()
+    # Tenta achar o primeiro bloco JSON
+    try:
+        # remove markdown fences se vierem
+        if raw.startswith("```"):
+            raw = raw.strip("`")
+            # pode vir como json\n{...}
+            idx = raw.find("{")
+            raw = raw[idx:] if idx >= 0 else raw
+        data = json.loads(raw)
+        # sanity defaults
+        itens = data.get("items") or []
+        totals = data.get("totais") or data.get("totals") or {}
+        dica = data.get("dica") or ""
+        return {
+            "items": itens,
+            "totais": {
+                "kcal": float(totals.get("kcal") or 0),
+                "protein_g": float(totals.get("protein_g") or totals.get("proteina_g") or 0),
+                "carbs_g": float(totals.get("carbs_g") or totals.get("carboidratos_g") or 0),
+                "fat_g": float(totals.get("fat_g") or totals.get("gorduras_g") or 0),
+            },
+            "dica": dica,
+            "_raw": raw,
+        }
+    except Exception:
+        # fallback mínimo
+        return {
+            "items": [],
+            "totais": {"kcal": 0.0, "protein_g": 0.0, "carbs_g": 0.0, "fat_g": 0.0},
+            "dica": "",
+            "_raw": raw,
+        }
+
+def _format_meal_reply(username: str, meal: dict, targets: dict | None) -> str:
+    itens = meal.get("items") or []
+    t = meal.get("totais") or {}
+    kcal = float(t.get("kcal") or 0)
+    p = float(t.get("protein_g") or 0)
+    c = float(t.get("carbs_g") or 0)
+    f = float(t.get("fat_g") or 0)
+    dica = meal.get("dica") or ""
+
+    header = "🍽️ **Refeição registrada (texto)**\n\n"
+    lista = ""
+    if itens:
+        lista = "Alimentos:\n" + "\n".join([f"- {i.get('nome','?')}: {i.get('quantidade','?')}" for i in itens]) + "\n\n"
+
+    macros = f"""**Macros estimadas:**
+- Calorias: {int(round(kcal))} kcal
+- Proteínas: {int(round(p))} g
+- Carboidratos: {int(round(c))} g
+- Gorduras: {int(round(f))} g
+"""
+
+    proj = ""
+    alertas = []
+    if targets and (tg := targets.get("targets")):
+        tkcal = float(tg.get("kcal") or 0)
+        tp = float(tg.get("protein_g") or 0)
+        tc = float(tg.get("carbs_g") or 0)
+        tf = float(tg.get("fat_g") or 0)
+
+        rem_kcal = max(0.0, tkcal - kcal)
+        rem_p = max(0.0, tp - p)
+        rem_c = max(0.0, tc - c)
+        rem_f = max(0.0, tf - f)
+
+        # gatilhos >5% (considerando a refeição isolada)
+        def _gt5(excesso, total): 
+            return total > 0 and (excesso / total) > 0.05
+
+        if kcal > tkcal and _gt5(kcal - tkcal, tkcal): alertas.append("Calorias acima da meta diária (>5%).")
+        if p > tp and _gt5(p - tp, tp): alertas.append("Proteína acima da meta diária (>5%).")
+        if c > tc and _gt5(c - tc, tc): alertas.append("Carboidratos acima da meta diária (>5%).")
+        if f > tf and _gt5(f - tf, tf): alertas.append("Gorduras acima da meta diária (>5%).")
+
+        proj = f"""
+**Projeção (se esta fosse a única refeição do dia):**
+- Restante hoje → {int(rem_kcal)} kcal, {int(rem_p)} g proteína, {int(rem_c)} g carbo, {int(rem_f)} g gordura
+"""
+    else:
+        proj = "\n*Perfil/metas incompletos. Use `/perfil` para definir e eu comparo com suas metas.*\n"
+
+    dica_txt = (f"\n💡 **Dica da Lina:** {dica}\n" if dica else "")
+    if alertas:
+        dica_txt += "⚠️ " + " ".join(alertas) + "\n"
+
+    return header + lista + macros + proj + dica_txt
+
 # ---------- Endpoints ----------
 @router.post("/send", response_model=ChatResponse)
 def send_to_ai(payload: ChatSendPayload, username: str = Depends(get_current_username)):
     """
-    Se começar com '/perfil ...', atualiza o perfil no ato e retorna metas.
-    Senão, conversa com a Lina (com system prompt enriquecido por profile+targets).
+    Comandos:
+      - /perfil ...        → atualiza perfil e retorna metas
+      - /refeicao <texto>  → analisa refeição em texto e compara com metas (sem persistência)
+    Caso contrário: conversa normal com a Lina (system prompt com profile+targets).
     """
     try:
         if not api_key:
@@ -196,7 +307,7 @@ def send_to_ai(payload: ChatSendPayload, username: str = Depends(get_current_use
         nome = user_data.get("nome") if user_data else None
         txt = payload.message.strip()
 
-        # --- Comando /perfil ---
+        # --- /perfil ---
         if txt.lower().startswith("/perfil"):
             patch = _parse_perfil_cmd(txt)
             if not patch:
@@ -209,7 +320,6 @@ def send_to_ai(payload: ChatSendPayload, username: str = Depends(get_current_use
             _validate_profile_patch(patch)
             _patch_profile(username, patch)
 
-            # Recalcular metas e responder
             sys_prompt, ctx = build_lina_system_prompt(username)
             t = ctx.get("targets") or {}
             trg = t.get("targets") or {}
@@ -224,6 +334,31 @@ def send_to_ai(payload: ChatSendPayload, username: str = Depends(get_current_use
             salvar_chat_message(username, "user", payload.message, "text")
             salvar_chat_message(username, "bot", resumo, "text")
             return ChatResponse(response=resumo)
+
+        # --- /refeicao ---
+        if txt.lower().startswith("/refeicao"):
+            parts = txt.split(None, 1)
+            if len(parts) < 2 or not parts[1].strip():
+                msg = "Uso: /refeicao <descrição da refeição> (ex: '/refeicao 150g frango grelhado, 1 xíc. arroz, salada')."
+                salvar_chat_message(username, "user", payload.message, "text")
+                salvar_chat_message(username, "bot", msg, "text")
+                return ChatResponse(response=msg)
+
+            description = parts[1].strip()
+
+            # Carrega metas (se possível)
+            try:
+                sys_prompt, ctx = build_lina_system_prompt(username)
+            except Exception:
+                sys_prompt, ctx = get_lina_chat_prompt(username, nome), {"profile": None, "targets": None}
+
+            # Analisa a refeição
+            meal = _analyze_meal_text(description)
+            reply = _format_meal_reply(username, meal, ctx.get("targets"))
+
+            salvar_chat_message(username, "user", payload.message, "text")
+            salvar_chat_message(username, "bot", reply, "text")
+            return ChatResponse(response=reply)
 
         # --- Conversa normal com a Lina ---
         try:
