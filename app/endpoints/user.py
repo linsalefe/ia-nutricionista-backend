@@ -1,5 +1,3 @@
-# app/endpoints/user.py
-
 import os
 from uuid import uuid4
 from typing import Optional, Dict, Any
@@ -7,7 +5,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.auth import (
     get_current_user,
@@ -206,17 +204,18 @@ def update_profile(
     if not updates:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")
     
+    # Atualiza dentro da sessão
     with session_scope() as db:
         user = db.execute(select(User).where(User.username == current_user["username"])).scalar_one_or_none()
         if not user:
             raise HTTPException(404, "Usuário não encontrado")
         
-        # Atualiza campos
         for field, value in updates.items():
             if hasattr(user, field):
                 setattr(user, field, value)
-    
-    return get_profile(request, _user_to_dict(user))  # type: ignore
+
+    # Depois do commit, pega um fresh via get_profile
+    return get_profile(request, current_user)
 
 
 @router.put("/password", status_code=204)
