@@ -1,18 +1,29 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, status
-from app.auth import get_current_username  # Importar a função do auth.py
-import openai
-import os
+# app/endpoints/image.py
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from app.auth import get_current_username
+from openai import OpenAI
 from dotenv import load_dotenv
-import base64
 from app.db import salvar_meal_analysis
+
+import os
+import base64
+import imghdr
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 router = APIRouter()
 
+ALLOWED_IMG_TYPES = {"jpeg", "png", "webp", "gif"}
+
+
+def _sniff_image_type(data: bytes, fallback: str = "jpeg") -> str:
+    kind = imghdr.what(None, h=data)
+    return kind if kind in ALLOWED_IMG_TYPES else fallback
+
+
 def get_lina_prompt(username: str) -> str:
-    """Retorna o prompt personalizado da Lina com o nome do usuário"""
+    """Prompt da Lina (formato exigido p/ o front)."""
     return f"""Você é a Lina, assistente nutricional da NutriFlow. O usuário {username} está compartilhando uma refeição com você.
 
 🎯 Sua missão: Ajudar {username} a alcançar seus objetivos através de uma alimentação consciente.
@@ -26,7 +37,7 @@ def get_lina_prompt(username: str) -> str:
 
 📊 Informações Nutricionais Totais:
 • Calorias: XXX kcal
-• Proteínas: XX g  
+• Proteínas: XX g
 • Carboidratos: XX g
 • Gorduras: XX g
 
@@ -36,7 +47,7 @@ def get_lina_prompt(username: str) -> str:
 ⚠️ Se identifiquei o alimento errado, coloque o nome correto aqui embaixo que eu corrijo a quantidade de nutrientes:
 [Campo para correção do usuário]
 
-⚠️ Importante: 
+⚠️ Importante:
 - Seja precisa mas amigável
 - Use o nome {username} quando apropriado
 - Se não tiver certeza dos valores, faça estimativas conservadoras
@@ -46,53 +57,64 @@ def get_lina_prompt(username: str) -> str:
 
 Lembre-se: Você é a companheira nutricional de {username}, sempre positiva e encorajadora! 😊"""
 
+
 @router.post("/analyze")
 async def analyze_image(
-    file: UploadFile = File(...), 
-    username: str = Depends(get_current_username)
+    file: UploadFile = File(...),
+    username: str = Depends(get_current_username),
 ):
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY não configurada.")
+
+    # Lê arquivo
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Arquivo de imagem vazio.")
+
+    # Tamanho (8MB)
+    if len(image_bytes) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Imagem muito grande (máx. 8MB).")
+
+    # Content-Type seguro
+    content_type = file.content_type or f"image/{_sniff_image_type(image_bytes)}"
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Envie um arquivo de imagem válido.")
+
+    # Data URL
+    data_url = f"data:{content_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
+
+    # Prompts
+    system_prompt = get_lina_prompt(username)
+
+    # OpenAI
+    client = OpenAI(api_key=OPENAI_API_KEY)
     try:
-        # Lê o arquivo enviado
-        image_bytes = await file.read()
-        # Codifica em base64
-        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-        # Descobre o tipo da imagem (opcional, mas bom para PNG/JPEG)
-        content_type = file.content_type  # Exemplo: "image/jpeg"
-        if content_type is None:
-            content_type = "image/jpeg"
-        data_url = f"data:{content_type};base64,{image_base64}"
-
-        # Debug: verificar se o username está chegando
-        print(f"DEBUG: Username recebido: {username}")
-        
-        # Gerar o prompt da Lina
-        lina_system_prompt = get_lina_prompt(username)
-        print(f"DEBUG: Prompt gerado para {username}")
-
-        # Envia para o GPT-4o Vision (OpenAI)
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": lina_system_prompt},
-                {"role": "user", "content": [
-                    {"type": "text", "text": f"Olá Lina! Sou o {username}. Analise nutricionalmente esse prato que estou compartilhando com você:"},
-                    {"type": "image_url", "image_url": {"url": data_url}}
-                ]}
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"Olá Lina! Sou o {username}. Analise nutricionalmente esse prato que estou compartilhando com você:",
+                        },
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                },
             ],
             max_tokens=800,
-            temperature=0.3
+            temperature=0.3,
         )
-        resultado = response.choices[0].message.content
-
-        # Salvar análise no banco de meals
-        salvar_meal_analysis(username, resultado, file.filename)
-
-        return {
-            "usuario": username,
-            "analise": resultado
-        }
-    
+        resultado = response.choices[0].message.content or ""
     except Exception as e:
-        print(f"Erro na análise: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Erro ao analisar imagem: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Falha na análise: {e}")
+
+    # Persistência (não quebra a resposta se falhar)
+    try:
+        salvar_meal_analysis(username, resultado, getattr(file, "filename", "upload"))
+    except Exception as e:
+        print(f"[WARN] Falha ao salvar análise: {e}")
+
+    return {"usuario": username, "analise": resultado}
